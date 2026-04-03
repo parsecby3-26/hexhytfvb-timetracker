@@ -1,0 +1,4577 @@
+
+============================================================
+FILE: \public\index.html
+============================================================
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0d9488" />
+    <meta name="description" content="Tickmarks TimeTracker - Employee Time Management System" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <title>Tickmarks TimeTracker</title>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+  </body>
+</html>
+
+
+
+
+
+
+
+============================================================
+FILE: \src\components\Approvals.js
+============================================================
+
+import React, { useState, useEffect } from 'react';
+import { timeEntriesAPI } from '../services/api';
+import { Check, X, Eye, Filter } from 'lucide-react';
+
+const Approvals = () => {
+  const [pendingEntries, setPendingEntries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedEntry, setSelectedEntry] = useState(null);
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [filter, setFilter] = useState('PENDING');
+
+  useEffect(() => {
+    fetchPendingApprovals();
+  }, []);
+
+  const fetchPendingApprovals = async () => {
+    setLoading(true);
+    try {
+      const response = await timeEntriesAPI.getPendingApprovals();
+      setPendingEntries(response.data.data || []);
+    } catch (error) {
+      console.error('Error fetching pending approvals:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApprove = async (entryId) => {
+    try {
+      await timeEntriesAPI.approve(entryId, { status: 'APPROVED' });
+      fetchPendingApprovals();
+    } catch (error) {
+      console.error('Error approving entry:', error);
+      alert('Failed to approve entry');
+    }
+  };
+
+  const handleReject = async () => {
+    if (!rejectionReason.trim()) {
+      alert('Please provide a reason for rejection');
+      return;
+    }
+    try {
+      await timeEntriesAPI.approve(selectedEntry.id, {
+        status: 'REJECTED',
+        rejection_reason: rejectionReason,
+      });
+      setShowRejectModal(false);
+      setSelectedEntry(null);
+      setRejectionReason('');
+      fetchPendingApprovals();
+    } catch (error) {
+      console.error('Error rejecting entry:', error);
+      alert('Failed to reject entry');
+    }
+  };
+
+  const getStatusBadge = (status) => `badge badge-${status.toLowerCase()}`;
+
+  if (loading) {
+    return (
+      <div className="loading-container">
+        <div className="spinner"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <header className="header">
+        <div className="header-title">
+          <h2>Approvals</h2>
+          <p>Review and approve time entries</p>
+        </div>
+        <div className="header-actions">
+          <select
+            className="form-select"
+            style={{ width: 'auto' }}
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+          >
+            <option value="PENDING">Pending</option>
+            <option value="APPROVED">Approved</option>
+            <option value="REJECTED">Rejected</option>
+            <option value="ALL">All</option>
+          </select>
+        </div>
+      </header>
+
+      <div className="page-content">
+        {pendingEntries.length === 0 ? (
+          <div className="card">
+            <div className="empty-state">
+              <div className="empty-state-icon">
+                <Check size={48} />
+              </div>
+              <div className="empty-state-title">All caught up!</div>
+              <div className="empty-state-text">No pending approvals at this time.</div>
+            </div>
+          </div>
+        ) : (
+          <div className="card">
+            <div className="card-header">
+              <h3 className="card-title">Pending Approvals ({pendingEntries.length})</h3>
+            </div>
+            <div className="table-container">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Employee</th>
+                    <th>Project</th>
+                    <th>Date</th>
+                    <th>Hours</th>
+                    <th>Notes</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pendingEntries.map((entry) => (
+                    <tr key={entry.id}>
+                      <td>
+                        <div className="flex items-center gap-2">
+                          <div className="avatar avatar-sm">
+                            {entry.user_name.split(' ').map(n => n[0]).join('')}
+                          </div>
+                          <span>{entry.user_name}</span>
+                        </div>
+                      </td>
+                      <td>{entry.project_name}</td>
+                      <td>{entry.work_date}</td>
+                      <td>{entry.hours}h</td>
+                      <td>{entry.notes || '-'}</td>
+                      <td>
+                        <div className="flex gap-2">
+                          <button
+                            className="btn btn-sm btn-success"
+                            onClick={() => handleApprove(entry.id)}
+                            title="Approve"
+                          >
+                            <Check size={16} />
+                          </button>
+                          <button
+                            className="btn btn-sm btn-danger"
+                            onClick={() => { setSelectedEntry(entry); setShowRejectModal(true); }}
+                            title="Reject"
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Quick Actions */}
+        <div className="stats-grid" style={{ marginTop: '24px' }}>
+          <div className="stat-card">
+            <div className="stat-card-header">
+              <div className="stat-icon orange">
+                <Eye size={24} />
+              </div>
+            </div>
+            <div className="stat-value">{pendingEntries.length}</div>
+            <div className="stat-label">Pending Approvals</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-card-header">
+              <div className="stat-icon teal">
+                <Filter size={24} />
+              </div>
+            </div>
+            <div className="stat-value">
+              {pendingEntries.reduce((sum, e) => sum + parseFloat(e.hours || 0), 0).toFixed(1)}h
+            </div>
+            <div className="stat-label">Total Hours Pending</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Reject Modal */}
+      {showRejectModal && (
+        <div className="modal-overlay" onClick={() => setShowRejectModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">Reject Time Entry</h3>
+              <button className="btn btn-icon" onClick={() => setShowRejectModal(false)}>
+                <X size={20} />
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label className="form-label">Employee</label>
+                <input type="text" className="form-input" value={selectedEntry?.user_name} disabled />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Project</label>
+                <input type="text" className="form-input" value={selectedEntry?.project_name} disabled />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Hours</label>
+                <input type="text" className="form-input" value={`${selectedEntry?.hours}h`} disabled />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Reason for Rejection</label>
+                <textarea
+                  className="form-input"
+                  placeholder="Please provide a reason for rejecting this time entry..."
+                  value={rejectionReason}
+                  onChange={(e) => setRejectionReason(e.target.value)}
+                  rows={4}
+                  required
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setShowRejectModal(false)}>
+                Cancel
+              </button>
+              <button className="btn btn-danger" onClick={handleReject}>
+                Reject Entry
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default Approvals;
+
+
+
+
+
+
+
+============================================================
+FILE: \src\components\Dashboard.js
+============================================================
+
+import React, { useState, useEffect } from 'react';
+import useAuthStore from '../stores/authStore';
+import { timeEntriesAPI, reportsAPI, projectsAPI } from '../services/api';
+import {
+  Clock,
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  TrendingUp,
+  Calendar,
+  Users,
+  FolderKanban,
+} from 'lucide-react';
+
+const Dashboard = () => {
+  const { user, isAdmin, isManager } = useAuthStore();
+  const [stats, setStats] = useState({
+    totalHours: 0,
+    pendingEntries: 0,
+    approvedEntries: 0,
+    rejectedEntries: 0,
+    totalProjects: 0,
+    totalUsers: 0,
+  });
+  const [recentEntries, setRecentEntries] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      const today = new Date();
+      const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+
+      // Fetch time entries
+      const entriesResponse = await timeEntriesAPI.list({
+        start_date: startOfMonth.toISOString().split('T')[0],
+        end_date: today.toISOString().split('T')[0],
+      });
+
+      const entries = entriesResponse.data.data.entries || [];
+      
+      // Calculate stats
+      const totalHours = entries.reduce((sum, e) => sum + parseFloat(e.hours || 0), 0);
+      const pendingEntries = entries.filter((e) => e.status === 'PENDING').length;
+      const approvedEntries = entries.filter((e) => e.status === 'APPROVED').length;
+      const rejectedEntries = entries.filter((e) => e.status === 'REJECTED').length;
+
+      // Fetch projects
+      const projectsResponse = await projectsAPI.list();
+      const totalProjects = projectsResponse.data.data.total || 0;
+
+      setStats({
+        totalHours,
+        pendingEntries,
+        approvedEntries,
+        rejectedEntries,
+        totalProjects,
+        totalUsers: 0,
+      });
+
+      setRecentEntries(entries.slice(0, 5));
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
+  };
+
+  const getStatusBadge = (status) => {
+    return `badge badge-${status.toLowerCase()}`;
+  };
+
+  if (loading) {
+    return (
+      <div className="loading-container">
+        <div className="spinner"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <header className="header">
+        <div className="header-title">
+          <h2>{getGreeting()}, {user?.name}!</h2>
+          <p>Here's what's happening with your time tracking</p>
+        </div>
+      </header>
+
+      <div className="page-content">
+        <div className="stats-grid">
+          <div className="stat-card">
+            <div className="stat-card-header">
+              <div className="stat-icon teal">
+                <Clock size={24} />
+              </div>
+            </div>
+            <div className="stat-value">{stats.totalHours.toFixed(1)}h</div>
+            <div className="stat-label">Total Hours This Month</div>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-card-header">
+              <div className="stat-icon orange">
+                <AlertCircle size={24} />
+              </div>
+            </div>
+            <div className="stat-value">{stats.pendingEntries}</div>
+            <div className="stat-label">Pending Approvals</div>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-card-header">
+              <div className="stat-icon green">
+                <CheckCircle size={24} />
+              </div>
+            </div>
+            <div className="stat-value">{stats.approvedEntries}</div>
+            <div className="stat-label">Approved Entries</div>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-card-header">
+              <div className="stat-icon blue">
+                <FolderKanban size={24} />
+              </div>
+            </div>
+            <div className="stat-value">{stats.totalProjects}</div>
+            <div className="stat-label">Active Projects</div>
+          </div>
+        </div>
+
+        <div className="card" style={{ marginBottom: '24px' }}>
+          <div className="card-header">
+            <h3 className="card-title">Recent Time Entries</h3>
+          </div>
+          <div className="table-container">
+            {recentEntries.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-state-icon">
+                  <Calendar size={48} />
+                </div>
+                <div className="empty-state-title">No time entries yet</div>
+                <div className="empty-state-text">Start tracking your time by adding entries in the Timesheets section.</div>
+              </div>
+            ) : (
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Project</th>
+                    <th>Date</th>
+                    <th>Hours</th>
+                    <th>Status</th>
+                    <th>Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentEntries.map((entry) => (
+                    <tr key={entry.id}>
+                      <td>{entry.project_name}</td>
+                      <td>{entry.work_date}</td>
+                      <td>{entry.hours}h</td>
+                      <td>
+                        <span className={getStatusBadge(entry.status)}>
+                          {entry.status}
+                        </span>
+                      </td>
+                      <td>{entry.notes || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+
+        {isAdmin() && (
+          <div className="card">
+            <div className="card-header">
+              <h3 className="card-title">Quick Actions</h3>
+            </div>
+            <div className="card-body">
+              <div className="flex gap-4">
+                <button className="btn btn-primary" onClick={() => window.location.href = '/users'}>
+                  <Users size={18} />
+                  Manage Users
+                </button>
+                <button className="btn btn-secondary" onClick={() => window.location.href = '/projects'}>
+                  <FolderKanban size={18} />
+                  Manage Projects
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default Dashboard;
+
+
+
+
+
+
+
+============================================================
+FILE: \src\components\ForgotPassword.js
+============================================================
+
+import React, { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { authAPI } from '../services/api';
+import { Mail, ArrowLeft } from 'lucide-react';
+
+const ForgotPassword = () => {
+  const navigate = useNavigate();
+  const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    setSuccess(false);
+
+    try {
+      const response = await authAPI.requestPasswordReset(email);
+      if (response.status === 200 || response.status === 201) {
+        setSuccess(true);
+        setEmail('');
+      }
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to send reset link. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="login-container">
+      <div className="login-card">
+        <div className="login-header">
+          <div style={{ marginBottom: '16px' }}>
+            <Mail size={32} color="var(--primary)" />
+          </div>
+          <h2 style={{ marginBottom: '8px' }}>Reset Password</h2>
+          <div className="login-subtitle">Enter your email to receive a password reset link</div>
+        </div>
+
+        {error && (
+          <div className="login-error" style={{ marginBottom: '20px' }}>
+            {error}
+          </div>
+        )}
+
+        {success ? (
+          <div style={{
+            padding: '16px',
+            borderRadius: '8px',
+            background: 'rgba(34, 197, 94, 0.1)',
+            border: '1px solid rgba(34, 197, 94, 0.3)',
+            marginBottom: '20px',
+            textAlign: 'center'
+          }}>
+            <div style={{ color: 'var(--success)', fontWeight: 500, marginBottom: '8px' }}>
+              ✓ Reset link sent!
+            </div>
+            <div style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+              Check your email for a password reset link. If you don't see it, check your spam folder.
+            </div>
+            <button
+              onClick={() => navigate('/login')}
+              className="btn btn-primary btn-block"
+              style={{ width: '100%' }}
+            >
+              Back to Login
+            </button>
+          </div>
+        ) : (
+          <form className="login-form" onSubmit={handleSubmit}>
+            <div className="form-group">
+              <label className="form-label">Email Address</label>
+              <input
+                type="email"
+                className="form-input"
+                placeholder="Enter your email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="btn btn-primary btn-block"
+              disabled={loading}
+              style={{ width: '100%', marginTop: '10px' }}
+            >
+              {loading ? 'Sending...' : 'Send Reset Link'}
+            </button>
+          </form>
+        )}
+
+        <div style={{ marginTop: '24px', textAlign: 'center' }}>
+          <Link
+            to="/login"
+            style={{
+              color: 'var(--primary)',
+              fontWeight: 500,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px'
+            }}
+          >
+            <ArrowLeft size={16} />
+            Back to Login
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ForgotPassword;
+
+
+
+
+============================================================
+FILE: \src\components\Layout.js
+============================================================
+
+import React, { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import useAuthStore from '../stores/authStore';
+import {
+  LayoutDashboard,
+  Calendar,
+  CheckSquare,
+  FolderKanban,
+  BarChart3,
+  Users,
+  LogOut,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-react';
+
+const Layout = ({ children }) => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user, logout, isAdmin, isManager } = useAuthStore();
+  const [collapsed, setCollapsed] = useState(false);
+
+  const navItems = [
+    { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+    { path: '/timesheets', icon: Calendar, label: 'Timesheets' },
+    ...(isAdmin() || isManager()
+      ? [{ path: '/approvals', icon: CheckSquare, label: 'Approvals' }]
+      : []),
+    { path: '/projects', icon: FolderKanban, label: 'Projects' },
+    { path: '/reports', icon: BarChart3, label: 'Reports' },
+    ...(isAdmin()
+      ? [{ path: '/users', icon: Users, label: 'User Provisioning' }]
+      : []),
+  ];
+
+  const handleLogout = () => {
+    logout();
+    navigate('/');
+  };
+
+  const getInitials = (name) => {
+    return name
+      ?.split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2) || 'U';
+  };
+
+  const getRoleBadgeClass = (role) => {
+    switch (role) {
+      case 'Admin': return 'role-badge admin';
+      case 'Manager': return 'role-badge manager';
+      default: return 'role-badge member';
+    }
+  };
+
+  return (
+    <div className="app-container">
+      <aside
+        className="sidebar"
+        style={{ width: collapsed ? '80px' : '260px', transition: 'width 0.3s ease' }}
+      >
+        <div className="sidebar-logo" style={{ padding: '20px', textAlign: 'center' }}>
+          <img
+            src="/tickmarks-logo.png"
+            alt="Tickmarks Logo"
+            style={{
+              height: collapsed ? '24px' : '40px',
+              maxWidth: '100%',
+              transition: 'height 0.3s ease'
+            }}
+          />
+          {!collapsed && (
+            <div style={{ color: 'white', fontWeight: 'bold', marginTop: '8px', fontSize: '18px' }}>
+              Timesheet
+            </div>
+          )}
+        </div>
+
+        <nav className="sidebar-nav">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = location.pathname === item.path;
+            return (
+              <div
+                key={item.path}
+                className={`nav-item ${isActive ? 'active' : ''}`}
+                onClick={() => navigate(item.path)}
+                title={collapsed ? item.label : ''}
+              >
+                <Icon size={20} />
+                {!collapsed && <span>{item.label}</span>}
+              </div>
+            );
+          })}
+        </nav>
+
+        <div className="sidebar-footer">
+          <div className="user-info" style={{ flexDirection: collapsed ? 'column' : 'row', alignItems: 'center' }}>
+            <div className="user-avatar">{getInitials(user?.name)}</div>
+            {!collapsed && (
+              <div className="user-details">
+                <div className="user-name">{user?.name}</div>
+                <div className="user-role">
+                  {user?.roles?.map((r) => (
+                    <span key={r.id || r.value} className={getRoleBadgeClass(r.value)}>
+                      {r.value}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          {!collapsed && (
+            <button
+              className="btn btn-secondary"
+              style={{
+                width: '100%',
+                marginTop: '16px',
+                background: 'rgba(255,255,255,0.1)',
+                color: 'white',
+                borderColor: 'rgba(255,255,255,0.2)'
+              }}
+              onClick={handleLogout}
+            >
+              <LogOut size={18} />
+              Sign Out
+            </button>
+          )}
+        </div>
+
+        <button
+          className="btn-icon"
+          style={{
+            position: 'absolute',
+            right: -12,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            background: 'white',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+            borderRadius: '50%',
+            width: '24px',
+            height: '24px',
+            padding: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100
+          }}
+          onClick={() => setCollapsed(!collapsed)}
+        >
+          {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+        </button>
+      </aside>
+
+      <main className="main-content">{children}</main>
+    </div>
+  );
+};
+
+export default Layout;
+
+
+
+============================================================
+FILE: \src\components\Login.js
+============================================================
+
+import React, { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import useAuthStore from '../stores/authStore';
+import { Eye, EyeOff, LogIn } from 'lucide-react';
+
+const Login = () => {
+  const navigate = useNavigate();
+  const { login, loading, error, clearError } = useAuthStore();
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+  });
+  const [showPassword, setShowPassword] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    clearError();
+    const success = await login(formData.email, formData.password);
+    if (success) {
+      navigate('/dashboard');
+    }
+  };
+
+  return (
+    <div className="login-container">
+      <div className="login-card">
+        <div className="login-header">
+          <div className="login-logo">
+            {/* Restored the Tickmarks Logo */}
+            <img
+              src="/tickmarks-logo.png"
+              alt="Tickmarks Logo"
+              style={{ height: '40px', marginBottom: '16px' }}
+            />
+          </div>
+          <div className="login-subtitle">Sign in to TimeTracker</div>
+        </div>
+
+        {error && (
+          <div className="login-error" style={{ marginBottom: '20px' }}>
+            {error}
+          </div>
+        )}
+
+        <form className="login-form" onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label className="form-label">Email Address</label>
+            <input
+              type="email"
+              className="form-input"
+              placeholder="Enter your email"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Password</label>
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                className="form-input"
+                placeholder="Enter your password"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                required
+                style={{ paddingRight: '48px' }}
+              />
+              <button
+                type="button"
+                className="btn-icon"
+                style={{
+                  position: 'absolute',
+                  right: '8px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--text-secondary)'
+                }}
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+            <Link
+              to="/forgot-password"
+              style={{
+                fontSize: '12px',
+                color: 'var(--primary)',
+                marginTop: '8px',
+                display: 'block',
+                textDecoration: 'none'
+              }}
+            >
+              Forgot password?
+            </Link>
+          </div>
+
+          <button
+            type="submit"
+            className="btn btn-primary btn-block"
+            disabled={loading}
+            style={{ width: '100%', marginTop: '10px' }}
+          >
+            {loading ? 'Signing in...' : 'Sign In'}
+          </button>
+        </form>
+
+        <div style={{ marginTop: '24px', textAlign: 'center' }}>
+          <p className="text-secondary text-sm">
+            Don't have an account?{' '}
+            <Link to="/register" style={{ color: 'var(--primary)', fontWeight: 500 }}>
+              Register here
+            </Link>
+          </p>
+        </div>
+
+        {/* Demo Credentials section has been removed */}
+      </div>
+    </div>
+  );
+};
+
+export default Login;
+
+
+
+============================================================
+FILE: \src\components\Projects.js
+============================================================
+
+import React, { useState, useEffect } from 'react';
+import { projectsAPI, usersAPI } from '../services/api';
+import useAuthStore from '../stores/authStore';
+import { Plus, Edit2, Trash2 } from 'lucide-react';
+
+const Projects = () => {
+  const { user, isAdmin, isManager } = useAuthStore();
+  const [projects, setProjects] = useState([]);
+  const [managers, setManagers] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [formData, setFormData] = useState({ name: '', client: '', manager_id: '', reporting_area: '' });
+  const [modalMembers, setModalMembers] = useState([]);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    fetchProjects();
+    fetchInitialData();
+  }, []);
+
+  const fetchProjects = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      console.log('Fetching projects from:', projectsAPI);
+      const response = await projectsAPI.list();
+      console.log('Projects response:', response);
+      
+      // Handle different response structures
+      const projectsList = response?.data?.data?.projects || response?.data?.data || response?.data || [];
+      let projectsArray = Array.isArray(projectsList) ? projectsList : [];
+      
+      // Ensure it's always an array
+      if (!Array.isArray(projectsArray)) {
+        projectsArray = [];
+      }
+      
+      // Fetch members for each project
+      const projectsWithMembers = await Promise.all(
+        projectsArray.map(async (project) => {
+          try {
+            const membersRes = await projectsAPI.getMembers(project.id);
+            return {
+              ...project,
+              members: Array.isArray(membersRes?.data?.data) ? membersRes.data.data : []
+            };
+          } catch (err) {
+            console.error(`Error fetching members for project ${project.id}:`, err);
+            return { ...project, members: [] };
+          }
+        })
+      );
+      
+      setProjects(Array.isArray(projectsWithMembers) ? projectsWithMembers : []);
+    } catch (error) {
+      console.error('Error fetching projects:', error.message, error.response?.data);
+      setError(`Failed to load projects: ${error.response?.data?.message || error.message}`);
+      setProjects([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchInitialData = async () => {
+    try {
+      const [mgrRes, userRes] = await Promise.all([usersAPI.getManagers(), usersAPI.list()]);
+      
+      let managersList = mgrRes?.data?.data || [];
+      let usersList = userRes?.data?.data || [];
+      
+      // Handle nested response structure from backend
+      if (usersList && typeof usersList === 'object' && !Array.isArray(usersList)) {
+        // If data has "users" property, extract it
+        if (usersList.users) {
+          usersList = usersList.users;
+        } else {
+          // Otherwise try to find array in object values
+          const values = Object.values(usersList);
+          if (Array.isArray(values[0]) && values[0].length > 0 && values[0][0]?.id) {
+            usersList = values[0];
+          } else {
+            usersList = values.filter(v => Array.isArray(v) && v[0]?.id);
+            if (usersList.length > 0) {
+              usersList = usersList[0];
+            }
+          }
+        }
+      }
+      
+      console.log('Processed managers:', managersList);
+      console.log('Processed users:', usersList);
+      
+      setManagers(Array.isArray(managersList) ? managersList : []);
+      setAllUsers(Array.isArray(usersList) ? usersList : []);
+    } catch (error) {
+      console.error('Error fetching data:', error.message, error.response?.data);
+      setManagers([]);
+      setAllUsers([]);
+    }
+  };
+
+  const handleAddMember = async (projectId, userId) => {
+    if (!userId) return;
+    try {
+      await projectsAPI.addMember(projectId, { user_id: parseInt(userId), bill_rate: 0 });
+      await fetchProjects();
+      // Reset the select by triggering a re-render
+    } catch (error) {
+      console.error('Error assigning member:', error);
+      alert('Failed to assign member');
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const finalData = { ...formData, manager_id: isAdmin ? formData.manager_id : user?.id };
+    try {
+      if (selectedProject) { await projectsAPI.update(selectedProject.id, finalData); }
+      else { await projectsAPI.create(finalData); }
+      
+      // Save members if we're updating and modal members were modified
+      if (selectedProject) {
+        await handleSaveProjectMembers();
+      }
+      
+      setShowModal(false);
+      setModalMembers([]);
+      fetchProjects();
+    } catch (error) {
+      console.error('Error saving project:', error);
+      alert('Failed to save project');
+    }
+  };
+
+  const handleDeleteProject = async (projectId) => {
+    if (window.confirm('Are you sure you want to delete this project?')) {
+      try {
+        await projectsAPI.delete(projectId);
+        fetchProjects();
+      } catch (error) {
+        alert('Failed to delete project');
+      }
+    }
+  };
+
+  const handleAddMemberToModal = (userId) => {
+    const user = allUsers.find(u => u.id === parseInt(userId));
+    if (user && !modalMembers.some(m => m.user_id === user.id)) {
+      console.log('Adding member:', user);
+      setModalMembers([...modalMembers, { user_id: user.id, user_name: user.name }]);
+    }
+  };
+
+  const handleRemoveMemberFromModal = (userId) => {
+    setModalMembers(modalMembers.filter(m => m.user_id !== userId));
+  };
+
+  const handleSaveProjectMembers = async () => {
+    try {
+      // Get current members from the project
+      const currentMembers = selectedProject?.members || [];
+      const currentMemberIds = new Set(currentMembers.map(m => m.user_id));
+      const newMemberIds = new Set(modalMembers.map(m => m.user_id));
+      
+      // Add new members
+      for (const memberId of newMemberIds) {
+        if (!currentMemberIds.has(memberId)) {
+          await projectsAPI.addMember(selectedProject.id, { user_id: memberId, bill_rate: 0 });
+        }
+      }
+      
+      // Remove members not in the list
+      for (const memberId of currentMemberIds) {
+        if (!newMemberIds.has(memberId)) {
+          await projectsAPI.removeMember(selectedProject.id, memberId);
+        }
+      }
+      
+      await fetchProjects();
+    } catch (error) {
+      console.error('Error saving members:', error);
+      alert('Failed to save project members');
+    }
+  };
+
+  return (
+    <div className="page-container">
+      <header className="header">
+        <div className="header-title"><h2>Projects</h2></div>
+        {(isAdmin || isManager) && (
+          <button className="btn btn-primary" onClick={() => { setSelectedProject(null); setFormData({ name: '', client: '', manager_id: isAdmin ? '' : user?.id, reporting_area: '' }); setShowModal(true); }}>
+            <Plus size={18} /> New Project
+          </button>
+        )}
+      </header>
+
+      <div className="page-content">
+        {error && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            {error}
+          </div>
+        )}
+        {loading ? (
+          <div className="text-center py-8">Loading projects...</div>
+        ) : !Array.isArray(projects) || projects.length === 0 ? (
+          <div className="text-center py-8 text-secondary">No projects found</div>
+        ) : (
+          <div className="table-container">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Project / Client</th>
+                  <th>Manager</th>
+                  <th>Team Allocation</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Array.isArray(projects) && projects.map(p => {
+                  const canManage = isAdmin || (isManager && p.manager_id === user?.id);
+                  const projectMembers = Array.isArray(p?.members) ? p.members : [];
+                  const availableUsers = (Array.isArray(allUsers) ? allUsers : []).filter(u => !projectMembers.some(m => m.user_id === u.id));
+                  return (
+                    <tr key={p.id}>
+                      <td><div className="font-bold">{p.name}</div><div className="text-xs text-secondary">{p.client}</div></td>
+                      <td>{p.manager_name}</td>
+                      <td>
+                        <div className="flex flex-wrap gap-2 items-center">
+                          {/* Show member names if: admin, manager, or employee assigned to this project */}
+                          {(() => {
+                            const isEmployeeOnProject = projectMembers.some(m => m.user_id === user?.id);
+                            const canViewMembers = isAdmin || isManager || isEmployeeOnProject;
+                            
+                            if (canViewMembers) {
+                              return (
+                                <>
+                                  {projectMembers.slice(0, 2).map(m => (
+                                    <span key={m.user_id} className="px-2 py-1 bg-slate-100 rounded text-xs border border-slate-200">{m.user_name}</span>
+                                  ))}
+                                  {projectMembers.length > 2 && (
+                                    <span className="px-2 py-1 bg-slate-200 rounded text-xs border border-slate-300 font-semibold">+{projectMembers.length - 2}</span>
+                                  )}
+                                </>
+                              );
+                            } else {
+                              // Employee not on this project - show count only
+                              return (
+                                <span className="text-sm text-muted">
+                                  {projectMembers.length} member{projectMembers.length !== 1 ? 's' : ''}
+                                </span>
+                              );
+                            }
+                          })()}
+                          {canManage && availableUsers.length > 0 && (
+                            <select 
+                              className="form-select text-xs py-1 px-2" 
+                              onChange={(e) => {
+                                if (e.target.value) {
+                                  handleAddMember(p.id, e.target.value);
+                                  e.target.value = '';
+                                }
+                              }} 
+                              value=""
+                              defaultValue=""
+                            >
+                              <option value="" disabled>+ Assign</option>
+                              {availableUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                            </select>
+                          )}
+                        </div>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          {canManage && (
+                            <button className="btn-icon" onClick={() => { 
+                              console.log('Opening edit modal. allUsers:', allUsers);
+                              setSelectedProject(p); 
+                              setFormData(p); 
+                              setModalMembers(Array.isArray(p.members) ? p.members : []); 
+                              setShowModal(true); 
+                            }} title="Edit"><Edit2 size={16} /></button>
+                          )}
+                          {isAdmin && (
+                            <button className="btn-icon btn-danger" onClick={() => handleDeleteProject(p.id)} title="Delete"><Trash2 size={16} /></button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {showModal && (
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <form onSubmit={handleSubmit}>
+              <div className="modal-header"><h3>{selectedProject ? 'Edit' : 'Create'} Project</h3></div>
+              <div className="modal-body">
+                <input className="form-input mb-4" placeholder="Name" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} required />
+                <input className="form-input mb-4" placeholder="Client" value={formData.client} onChange={e => setFormData({ ...formData, client: e.target.value })} required />
+                <select className="form-select mb-4" value={formData.manager_id || ''} onChange={e => setFormData({ ...formData, manager_id: e.target.value })} required disabled={!isAdmin}>
+                  <option value="">Select Manager</option>
+                  {(Array.isArray(managers) ? managers : []).map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+                
+                {selectedProject && (
+                  <div className="mb-4">
+                    <label className="block text-sm font-semibold mb-2">Project Members</label>
+                    
+                    {/* Current Members */}
+                    {modalMembers.length > 0 && (
+                      <div className="mb-3 p-3 bg-slate-50 rounded border border-slate-200">
+                        <p className="text-xs font-semibold text-slate-600 mb-2">Assigned Members:</p>
+                        <div className="flex flex-wrap gap-2">
+                          {modalMembers.map(m => (
+                            <div key={m.user_id} className="flex items-center gap-2 px-2 py-1 bg-blue-100 rounded text-xs border border-blue-300">
+                              <span>{m.user_name}</span>
+                              <button
+                                type="button"
+                                className="text-red-600 hover:text-red-800 font-bold"
+                                onClick={() => handleRemoveMemberFromModal(m.user_id)}
+                                title="Remove member"
+                              >
+                                �
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Add Members */}
+                    <div>
+                      <p className="text-xs text-slate-600 mb-2">Available members: {Array.isArray(allUsers) ? allUsers.length : 0} total</p>
+                      {Array.isArray(allUsers) && allUsers.length > 0 ? (
+                        <select 
+                          className="form-select text-sm w-full" 
+                          onChange={(e) => {
+                            console.log('Selected user:', e.target.value);
+                            if (e.target.value) {
+                              handleAddMemberToModal(e.target.value);
+                              e.target.value = '';
+                            }
+                          }}
+                          value=""
+                          defaultValue=""
+                        >
+                          <option value="" disabled>+ Add Member</option>
+                          {allUsers.map(u => {
+                            const isAssigned = modalMembers.some(m => m.user_id === u.id);
+                            return (
+                              <option key={u.id} value={u.id} disabled={isAssigned}>
+                                {u.name} {isAssigned ? '(assigned)' : ''}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      ) : (
+                        <div className="text-sm text-slate-500 p-2 border border-slate-200 rounded">
+                          {Array.isArray(allUsers) ? 'No members available to add' : 'Loading members...'}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => { setShowModal(false); setModalMembers([]); }}>Cancel</button>
+                <button type="submit" className="btn btn-primary">Save Project</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default Projects;
+
+
+
+============================================================
+FILE: \src\components\Register.js
+============================================================
+
+import React, { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import useAuthStore from '../stores/authStore';
+import { Eye, EyeOff, Check } from 'lucide-react';
+
+const Register = () => {
+  const navigate = useNavigate();
+  const { register, loading, error, clearError } = useAuthStore();
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [success, setSuccess] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    clearError();
+
+    if (formData.password !== formData.confirmPassword) {
+      alert('Passwords do not match');
+      return;
+    }
+
+    const result = await register({
+      name: formData.name,
+      email: formData.email,
+      password: formData.password,
+      roles: ['Member'],
+    });
+
+    if (result) {
+      setSuccess(true);
+    }
+  };
+
+  if (success) {
+    return (
+      <div className="login-container">
+        <div className="login-card">
+          <div className="login-header">
+            <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: 'var(--success)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+              <Check size={32} color="white" />
+            </div>
+            <div className="login-logo" style={{ color: 'var(--success)' }}>Registration Successful!</div>
+            <div className="login-subtitle">
+              Please check your email to verify your account before signing in.
+            </div>
+          </div>
+          <button
+            className="btn btn-primary"
+            style={{ width: '100%' }}
+            onClick={() => navigate('/')}
+          >
+            Go to Sign In
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="login-container">
+      <div className="login-card">
+        <div className="login-header">
+          <div className="login-logo">
+                <img src="/tickmarks-logo.png" alt="Tickmarks Logo" style={{ height: '40px' }} />
+          </div>
+          <div className="login-subtitle">Create your account</div>
+        </div>
+
+        {error && (
+          <div className="login-error">
+            {error}
+          </div>
+        )}
+
+        <form className="login-form" onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label className="form-label">Full Name</label>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="Enter your full name"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Email Address</label>
+            <input
+              type="email"
+              className="form-input"
+              placeholder="Enter your email"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Password</label>
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showPassword ? 'text' : 'password'}
+                className="form-input"
+                placeholder="Create a password"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                required
+                minLength={8}
+                style={{ paddingRight: '48px' }}
+              />
+              <button
+                type="button"
+                className="btn-icon"
+                style={{
+                  position: 'absolute',
+                  right: '8px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                }}
+                onClick={() => setShowPassword(!showPassword)}
+              >
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Confirm Password</label>
+            <input
+              type="password"
+              className="form-input"
+              placeholder="Confirm your password"
+              value={formData.confirmPassword}
+              onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+              required
+            />
+          </div>
+
+          <button type="submit" className="btn btn-primary" disabled={loading}>
+            {loading ? 'Creating Account...' : 'Create Account'}
+          </button>
+        </form>
+
+        <div style={{ marginTop: '24px', textAlign: 'center' }}>
+          <p className="text-secondary text-sm">
+            Already have an account?{' '}
+            <Link to="/" style={{ color: 'var(--primary)', fontWeight: 500 }}>
+              Sign in here
+            </Link>
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Register;
+
+
+
+
+
+
+
+============================================================
+FILE: \src\components\Reports.js
+============================================================
+
+import React, { useState, useEffect } from 'react';
+import { reportsAPI } from '../services/api';
+import useAuthStore from '../stores/authStore';
+import {
+  BarChart3,
+  PieChart,
+  TrendingUp,
+  Calendar,
+  Download,
+  Users,
+} from 'lucide-react';
+
+const Reports = () => {
+  const { isAdmin, isManager } = useAuthStore();
+  const [reportData, setReportData] = useState(null);
+  const [areaData, setAreaData] = useState(null);
+  const [teamEntries, setTeamEntries] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('summary');
+  const [dateRange, setDateRange] = useState({
+    start_date: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+    end_date: new Date().toISOString().split('T')[0],
+  });
+
+  useEffect(() => {
+    fetchReports();
+  }, [dateRange]);
+
+  const fetchReports = async () => {
+    setLoading(true);
+    try {
+      const requests = [
+        reportsAPI.getSummary(dateRange),
+        reportsAPI.getByReportingArea(dateRange),
+      ];
+      
+      // Managers can also see daily entries for their team
+      if (isManager) {
+        requests.push(reportsAPI.getDaily(dateRange));
+      }
+      
+      const results = await Promise.all(requests);
+      setReportData(results[0].data.data);
+      setAreaData(results[1].data.data);
+      if (isManager && results[2]) {
+        setTeamEntries(results[2].data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching reports:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDateChange = (field, value) => {
+    setDateRange({ ...dateRange, [field]: value });
+  };
+
+  const exportToCSV = () => {
+    if (!reportData) return;
+    
+    let csv = 'Project,Client,Reporting Area,Total Hours\n';
+    reportData.project_summary.forEach(project => {
+      csv += `"${project.project_name}","${project.client}","${project.reporting_area || 'N/A'}",${project.total_hours}\n`;
+    });
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `time-report-${dateRange.start_date}-to-${dateRange.end_date}.csv`;
+    a.click();
+  };
+
+  if (loading) {
+    return (
+      <div className="loading-container">
+        <div className="spinner"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <header className="header">
+        <div className="header-title">
+          <h2>Reports</h2>
+          <p>View time tracking analytics and summaries</p>
+        </div>
+        <div className="header-actions">
+          <div className="flex gap-2">
+            <input
+              type="date"
+              className="form-input"
+              style={{ width: 'auto' }}
+              value={dateRange.start_date}
+              onChange={(e) => handleDateChange('start_date', e.target.value)}
+            />
+            <span className="text-secondary" style={{ alignSelf: 'center' }}>to</span>
+            <input
+              type="date"
+              className="form-input"
+              style={{ width: 'auto' }}
+              value={dateRange.end_date}
+              onChange={(e) => handleDateChange('end_date', e.target.value)}
+            />
+          </div>
+          <button className="btn btn-secondary" onClick={exportToCSV}>
+            <Download size={18} />
+            Export CSV
+          </button>
+        </div>
+      </header>
+
+      {/* Tabs for Managers */}
+      {isManager && (
+        <div style={{ borderBottom: '1px solid var(--border)', marginBottom: '24px' }}>
+          <div className="page-content" style={{ display: 'flex', gap: '24px', borderBottom: 'none', paddingBottom: '0' }}>
+            <button
+              onClick={() => setActiveTab('summary')}
+              style={{
+                padding: '12px 0',
+                border: 'none',
+                background: 'none',
+                cursor: 'pointer',
+                borderBottom: activeTab === 'summary' ? '2px solid var(--primary)' : 'none',
+                color: activeTab === 'summary' ? 'var(--primary)' : 'var(--text-secondary)',
+                fontWeight: activeTab === 'summary' ? '600' : '500',
+                fontSize: '14px',
+              }}
+            >
+              Analytics
+            </button>
+            <button
+              onClick={() => setActiveTab('team')}
+              style={{
+                padding: '12px 0',
+                border: 'none',
+                background: 'none',
+                cursor: 'pointer',
+                borderBottom: activeTab === 'team' ? '2px solid var(--primary)' : 'none',
+                color: activeTab === 'team' ? 'var(--primary)' : 'var(--text-secondary)',
+                fontWeight: activeTab === 'team' ? '600' : '500',
+                fontSize: '14px',
+              }}
+            >
+              <Users size={16} style={{ display: 'inline', marginRight: '6px', verticalAlign: 'middle' }} />
+              Team Time Entries
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="page-content">
+        {/* Summary Tab */}
+        {activeTab === 'summary' && (
+        <>
+        {/* Summary Cards */}
+        <div className="stats-grid">
+          <div className="stat-card">
+            <div className="stat-card-header">
+              <div className="stat-icon teal">
+                <Clock size={24} />
+              </div>
+            </div>
+            <div className="stat-value">{reportData?.total_hours?.toFixed(1) || 0}h</div>
+            <div className="stat-label">Total Hours</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-card-header">
+              <div className="stat-icon blue">
+                <PieChart size={24} />
+              </div>
+            </div>
+            <div className="stat-value">{reportData?.total_projects || 0}</div>
+            <div className="stat-label">Projects Tracked</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-card-header">
+              <div className="stat-icon green">
+                <TrendingUp size={24} />
+              </div>
+            </div>
+            <div className="stat-value">
+              {reportData?.project_summary?.length > 0
+                ? (reportData.total_hours / reportData.total_projects).toFixed(1)
+                : 0}h
+            </div>
+            <div className="stat-label">Avg Hours/Project</div>
+          </div>
+        </div>
+
+        {/* By Reporting Area */}
+        {areaData && areaData.length > 0 && (
+          <div className="card" style={{ marginBottom: '24px' }}>
+            <div className="card-header">
+              <h3 className="card-title">Hours by Reporting Area</h3>
+            </div>
+            <div className="card-body">
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+                {areaData.map((area, index) => {
+                  const colors = ['var(--primary)', 'var(--secondary)', 'var(--success)', 'var(--warning)', 'var(--error)'];
+                  const color = colors[index % colors.length];
+                  const percentage = reportData?.total_hours
+                    ? ((area.total_hours / reportData.total_hours) * 100).toFixed(1)
+                    : 0;
+                  
+                  return (
+                    <div
+                      key={area.reporting_area}
+                      style={{
+                        padding: '20px',
+                        borderRadius: '12px',
+                        background: `${color}10`,
+                        borderLeft: `4px solid ${color}`,
+                      }}
+                    >
+                      <div className="text-sm text-secondary mb-1">{area.reporting_area}</div>
+                      <div className="font-bold" style={{ fontSize: '24px', color }}>
+                        {area.total_hours.toFixed(1)}h
+                      </div>
+                      <div className="text-xs text-muted">{percentage}% of total</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Project Summary Table */}
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-title">Project Summary</h3>
+          </div>
+          <div className="table-container">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Project</th>
+                  <th>Client</th>
+                  <th>Reporting Area</th>
+                  <th>Total Hours</th>
+                  <th>Team Members</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reportData?.project_summary?.map((project) => (
+                  <tr key={project.project_id}>
+                    <td className="font-medium">{project.project_name}</td>
+                    <td>{project.client}</td>
+                    <td>{project.reporting_area || '-'}</td>
+                    <td>
+                      <span style={{ fontWeight: 600, color: 'var(--primary)' }}>
+                        {project.total_hours.toFixed(1)}h
+                      </span>
+                    </td>
+                    <td>
+                      <div className="flex items-center gap-1">
+                        {(isAdmin || isManager) ? (
+                          // Show names for admin and managers
+                          <>
+                            {project.user_hours?.slice(0, 3).map((user, i) => (
+                              <div
+                                key={i}
+                                className="avatar avatar-sm"
+                                style={{
+                                  marginLeft: i > 0 ? '-8px' : '0',
+                                  border: '2px solid white',
+                                  fontSize: '10px',
+                                }}
+                                title={user.user_name}
+                              >
+                                {user.user_name.split(' ').map(n => n[0]).join('')}
+                              </div>
+                            ))}
+                            {project.user_hours?.length > 3 && (
+                              <span className="text-xs text-muted">
+                                +{project.user_hours.length - 3} more
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          // Show only count for employees
+                          <span className="text-sm text-muted">
+                            {project.user_hours?.length || 0} member{project.user_hours?.length !== 1 ? 's' : ''}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        </>
+        )}
+
+        {/* Team Time Entries Tab */}
+        {activeTab === 'team' && isManager && teamEntries && (
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-title">Team Time Entries</h3>
+            <p className="text-xs text-secondary">{teamEntries.length} entries recorded</p>
+          </div>
+          <div className="table-container">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Employee</th>
+                  <th>Project</th>
+                  <th>Date</th>
+                  <th>Hours</th>
+                  <th>Reporting Area</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {teamEntries.map((entry) => (
+                  <tr key={entry.id}>
+                    <td className="font-medium">{entry.user_name}</td>
+                    <td>{entry.project_name}</td>
+                    <td>{new Date(entry.entry_date).toLocaleDateString()}</td>
+                    <td><span style={{ fontWeight: 600, color: 'var(--primary)' }}>{entry.hours}h</span></td>
+                    <td className="text-secondary">{entry.reporting_area || '-'}</td>
+                    <td className="text-secondary text-xs">{entry.notes || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Add Clock import at the top
+const Clock = ({ size }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10" />
+    <polyline points="12 6 12 12 16 14" />
+  </svg>
+);
+
+export default Reports;
+
+
+
+
+
+
+
+============================================================
+FILE: \src\components\ResetPassword.js
+============================================================
+
+import React, { useState } from 'react';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { authAPI } from '../services/api';
+import { Eye, EyeOff, Lock } from 'lucide-react';
+
+const ResetPassword = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const token = searchParams.get('token');
+
+  const [formData, setFormData] = useState({
+    password: '',
+    confirmPassword: '',
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+
+    if (!token) {
+      setError('Invalid or missing reset token. Please request a new password reset.');
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters long.');
+      return;
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await authAPI.resetPassword(token, formData.password);
+      setSuccess(true);
+      setFormData({ password: '', confirmPassword: '' });
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to reset password. The link may have expired.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!token) {
+    return (
+      <div className="login-container">
+        <div className="login-card">
+          <div className="login-header">
+            <div style={{ marginBottom: '16px' }}>
+              <Lock size={32} color="var(--error)" />
+            </div>
+            <h2 style={{ marginBottom: '8px' }}>Invalid Reset Link</h2>
+          </div>
+          <div className="login-error" style={{ marginBottom: '20px' }}>
+            No reset token found. Please request a new password reset.
+          </div>
+          <Link to="/forgot-password" className="btn btn-primary btn-block" style={{ width: '100%' }}>
+            Request New Reset Link
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="login-container">
+      <div className="login-card">
+        <div className="login-header">
+          <div style={{ marginBottom: '16px' }}>
+            <Lock size={32} color="var(--primary)" />
+          </div>
+          <h2 style={{ marginBottom: '8px' }}>Create New Password</h2>
+          <div className="login-subtitle">Enter your new password below</div>
+        </div>
+
+        {error && (
+          <div className="login-error" style={{ marginBottom: '20px' }}>
+            {error}
+          </div>
+        )}
+
+        {success ? (
+          <div style={{
+            padding: '16px',
+            borderRadius: '8px',
+            background: 'rgba(34, 197, 94, 0.1)',
+            border: '1px solid rgba(34, 197, 94, 0.3)',
+            marginBottom: '20px',
+            textAlign: 'center'
+          }}>
+            <div style={{ color: 'var(--success)', fontWeight: 500, marginBottom: '8px' }}>
+              ✓ Password Reset Successful!
+            </div>
+            <div style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+              Your password has been changed. You can now log in with your new password.
+            </div>
+            <button
+              onClick={() => navigate('/login')}
+              className="btn btn-primary btn-block"
+              style={{ width: '100%' }}
+            >
+              Go to Login
+            </button>
+          </div>
+        ) : (
+          <form className="login-form" onSubmit={handleSubmit}>
+            <div className="form-group">
+              <label className="form-label">New Password</label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  className="form-input"
+                  placeholder="Enter new password"
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  required
+                  style={{ paddingRight: '48px' }}
+                />
+                <button
+                  type="button"
+                  className="btn-icon"
+                  style={{
+                    position: 'absolute',
+                    right: '8px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: 'var(--text-secondary)'
+                  }}
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label className="form-label">Confirm Password</label>
+              <div style={{ position: 'relative' }}>
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  className="form-input"
+                  placeholder="Confirm new password"
+                  value={formData.confirmPassword}
+                  onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                  required
+                  style={{ paddingRight: '48px' }}
+                />
+                <button
+                  type="button"
+                  className="btn-icon"
+                  style={{
+                    position: 'absolute',
+                    right: '8px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: 'var(--text-secondary)'
+                  }}
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                >
+                  {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </div>
+
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+              Password must be at least 6 characters long.
+            </div>
+
+            <button
+              type="submit"
+              className="btn btn-primary btn-block"
+              disabled={loading}
+              style={{ width: '100%', marginTop: '10px' }}
+            >
+              {loading ? 'Resetting Password...' : 'Reset Password'}
+            </button>
+          </form>
+        )}
+
+        <div style={{ marginTop: '24px', textAlign: 'center' }}>
+          <Link
+            to="/login"
+            style={{
+              color: 'var(--primary)',
+              fontWeight: 500,
+              textDecoration: 'none'
+            }}
+          >
+            Back to Login
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ResetPassword;
+
+
+
+
+============================================================
+FILE: \src\components\Timesheets.js
+============================================================
+
+import React, { useState, useEffect } from 'react';
+import { timeEntriesAPI, projectsAPI } from '../services/api';
+import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, List, AlertCircle, Edit2 } from 'lucide-react';
+
+const Timesheets = () => {
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [entries, setEntries] = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [viewMode, setViewMode] = useState('calendar');
+  const [editingEntry, setEditingEntry] = useState(null);
+  const [formData, setFormData] = useState({ project_id: '', hours: '', notes: '' });
+
+  useEffect(() => { fetchProjects(); }, []);
+  useEffect(() => { fetchEntries(); }, [currentDate]);
+
+  const fetchProjects = async () => {
+    try {
+      const response = await projectsAPI.list();
+      setProjects(response?.data?.data?.projects || []);
+    } catch (error) { console.error(error); }
+  };
+
+  const fetchEntries = async () => {
+    setLoading(true);
+    try {
+      const year = currentDate.getFullYear();
+      const month = currentDate.getMonth();
+      const response = await timeEntriesAPI.list({
+        start_date: new Date(year, month, 1).toISOString().split('T')[0],
+        end_date: new Date(year, month + 1, 0).toISOString().split('T')[0]
+      });
+      setEntries(response?.data?.data?.entries || []);
+    } catch (error) { console.error(error); }
+    finally { setLoading(false); }
+  };
+
+  const isDateInCurrentWeek = (date) => {
+    if (!date) return false;
+    const now = new Date();
+    const dayOfWeek = now.getDay(); // 0 is Sunday
+    const diffToMonday = now.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+    const monday = new Date(now.setDate(diffToMonday));
+    monday.setHours(0, 0, 0, 0);
+
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    sunday.setHours(23, 59, 59, 999);
+
+    const checkDate = new Date(date);
+    return checkDate >= monday && checkDate <= sunday;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (editingEntry) {
+      // Editing existing entry (new hours)
+      try {
+        // Validate hours
+        const hoursValue = parseFloat(formData.hours);
+        console.log('Hours validation - formData.hours:', formData.hours, 'parsed:', hoursValue);
+        
+        if (isNaN(hoursValue)) {
+          alert('Please enter valid hours');
+          return;
+        }
+        if (hoursValue < 0 || hoursValue > 24) {
+          alert('Hours must be between 0 and 24');
+          return;
+        }
+
+        const updateData = { 
+          hours: hoursValue
+        };
+        
+        // Only send notes if it has a value (not empty string)
+        if (formData.notes && formData.notes.trim()) {
+          updateData.notes = formData.notes.trim();
+        }
+        
+        console.log('Project comparison - formData.project_id:', formData.project_id, 'type:', typeof formData.project_id, 
+                   'editingEntry.project_id:', editingEntry.project_id, 'type:', typeof editingEntry.project_id);
+        
+        // Only include project_id if it's different from original
+        if (formData.project_id && parseInt(formData.project_id) !== editingEntry.project_id) {
+          updateData.project_id = parseInt(formData.project_id);
+          console.log('Including project_id in update');
+        }
+        
+        console.log('Final update payload:', JSON.stringify(updateData));
+        console.log('Updating entry:', editingEntry.id, 'with data:', updateData);
+        console.log('Entry details - ID:', editingEntry.id, 'Status:', editingEntry.status, 'User ID:', editingEntry.user_id);
+        const response = await timeEntriesAPI.update(editingEntry.id, updateData);
+        console.log('Update response:', response);
+        setShowModal(false);
+        setEditingEntry(null);
+        fetchEntries();
+        setFormData({ project_id: '', hours: '', notes: '' });
+        alert('Entry resubmitted successfully!');
+      } catch (error) {
+        console.error('Update error full:', error);
+        console.error('Error response:', error.response?.data);
+        console.error('Error config:', error.config);
+        const errorMsg = error.response?.data?.detail || error.response?.data?.message || error.message || "Save failed"; 
+        alert(errorMsg);
+      }
+    } else {
+      // Creating new entry
+      const existingHours = entries
+        .filter(e => e.work_date === selectedDate)
+        .reduce((sum, entry) => sum + parseFloat(entry.hours), 0);
+
+      const totalHours = existingHours + parseFloat(formData.hours);
+      
+      // Allow any entry to be saved; total hours requirement is checked at submission
+      if (isNaN(totalHours) || totalHours <= 0) {
+        alert("Please enter valid hours.");
+        return;
+      }
+
+      try {
+        await timeEntriesAPI.create({ ...formData, work_date: selectedDate });
+        setShowModal(false);
+        fetchEntries();
+        setFormData({ project_id: '', hours: '', notes: '' });
+      } catch (error) { alert("Save failed"); }
+    }
+  };
+
+  const getDaysInMonth = () => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const days = [];
+    for (let i = 0; i < firstDay; i++) days.push(null);
+    for (let i = 1; i <= daysInMonth; i++) days.push(new Date(year, month, i));
+    return days;
+  };
+
+  const getDailyTotal = (date) => {
+    return entries
+      .filter(e => e.work_date === date)
+      .reduce((sum, entry) => sum + parseFloat(entry.hours), 0);
+  };
+
+  const getProjectsForDate = (date) => {
+    return entries.filter(e => e.work_date === date);
+  };
+
+  const getRejectedEntriesForDate = (date) => {
+    return entries.filter(e => e.work_date === date && e.status === 'REJECTED');
+  };
+
+  const handleDateClick = (dateStr) => {
+    setSelectedDate(dateStr);
+    setEditingEntry(null);
+    setFormData({ project_id: '', hours: '', notes: '' });
+    setShowModal(true);
+  };
+
+  const handleEditRejectedEntry = (entry) => {
+    console.log('Loading rejected entry for editing:', entry);
+    setEditingEntry(entry);
+    setFormData({
+      project_id: entry.project_id ? entry.project_id.toString() : '',
+      hours: entry.hours ? entry.hours.toString() : '',
+      notes: entry.notes || ''
+    });
+    console.log('Form data set to:', {
+      project_id: entry.project_id ? entry.project_id.toString() : '',
+      hours: entry.hours ? entry.hours.toString() : '',
+      notes: entry.notes || ''
+    });
+  };
+  return (
+    <div className="page-container">
+      <header className="header">
+        <div className="header-title"><h2>Timesheets</h2><p>{currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}</p></div>
+        <div className="flex gap-2">
+          <button className="btn btn-secondary" onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))}><ChevronLeft /></button>
+          <button className="btn btn-secondary" onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))}><ChevronRight /></button>
+        </div>
+      </header>
+
+      <div className="page-content">
+        <div className="calendar-grid">
+          {getDaysInMonth().map((day, idx) => {
+            const dateStr = day?.toISOString().split('T')[0];
+            const active = isDateInCurrentWeek(day);
+            return (
+              <div
+                key={idx}
+                className={`calendar-day ${!day ? 'empty' : ''} ${!active && day ? 'day-disabled' : ''}`}
+                onClick={() => active && handleDateClick(dateStr)}
+                style={!active && day ? { background: '#f8f9fa', opacity: 0.5, cursor: 'not-allowed' } : {}}
+              >
+                {day && <span className="day-number">{day.getDate()}</span>}
+                <div className="day-entries">
+                  {entries.filter(e => e.work_date === dateStr).map(e => <div key={e.id} className="text-xs">{e.hours}h</div>)}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {showModal && (
+        <div className="modal-overlay" onClick={() => { setShowModal(false); setEditingEntry(null); }}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            {/* Rejected Entries Section */}
+            {getRejectedEntriesForDate(selectedDate).length > 0 && !editingEntry && (
+              <div style={{ marginBottom: '0', borderBottom: '1px solid var(--border)' }}>
+                <div className="modal-header" style={{ paddingBottom: '12px', borderBottom: 'none' }}>
+                  <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '0 0 12px 0' }}>
+                    <AlertCircle size={20} color="var(--error)" />
+                    Rejected Entries - Please Review
+                  </h3>
+                </div>
+                <div style={{ padding: '16px', background: 'rgba(220, 38, 38, 0.05)' }}>
+                  {getRejectedEntriesForDate(selectedDate).map(rejectedEntry => (
+                    <div key={rejectedEntry.id} style={{
+                      padding: '12px',
+                      marginBottom: '12px',
+                      borderRadius: '8px',
+                      border: '1px solid var(--error)',
+                      background: 'white'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                        <div>
+                          <div style={{ fontWeight: '600', color: 'var(--text)' }}>
+                            {rejectedEntry.project_name} - {parseFloat(rejectedEntry.hours).toFixed(1)}h
+                          </div>
+                          <div style={{ fontSize: '12px', color: 'var(--error)', marginTop: '4px' }}>
+                            Rejection reason: {rejectedEntry.rejection_reason || 'No reason provided'}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleEditRejectedEntry(rejectedEntry)}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: '6px',
+                            border: 'none',
+                            background: 'var(--primary)',
+                            color: 'white',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            fontSize: '12px',
+                            fontWeight: '500'
+                          }}
+                        >
+                          <Edit2 size={14} />
+                          Edit & Resubmit
+                        </button>
+                      </div>
+                      {rejectedEntry.notes && (
+                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '8px', fontStyle: 'italic' }}>
+                          Original notes: "{rejectedEntry.notes}"
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit}>
+              <div className="modal-header">
+                <h3>{editingEntry ? `Edit & Resubmit: ${editingEntry.project_name}` : `Log Time: ${selectedDate}`}</h3>
+              </div>
+              <div className="modal-body">
+                {/* Daily Total Summary */}
+                <div style={{ 
+                  padding: '12px', 
+                  marginBottom: '16px', 
+                  borderRadius: '8px',
+                  background: 'rgba(13, 148, 136, 0.1)',
+                  border: '1px solid rgba(13, 148, 136, 0.3)'
+                }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>Daily Total</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ fontSize: '20px', fontWeight: '600', color: 'var(--primary)' }}>
+                      {getDailyTotal(selectedDate).toFixed(1)} hours
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                      {formData.hours ? `+ ${parseFloat(formData.hours).toFixed(1)} = ${(getDailyTotal(selectedDate) + parseFloat(formData.hours)).toFixed(1)} hours` : ''}
+                    </div>
+                  </div>
+                  {(getDailyTotal(selectedDate) + (formData.hours ? parseFloat(formData.hours) : 0)) < 8 && !editingEntry && (
+                    <div style={{ fontSize: '11px', color: 'var(--warning)', marginTop: '6px' }}>
+                      ? Need {(8 - (getDailyTotal(selectedDate) + (formData.hours ? parseFloat(formData.hours) : 0))).toFixed(1)} more hours to reach 8-hour requirement
+                    </div>
+                  )}
+                  {(getDailyTotal(selectedDate) + (formData.hours ? parseFloat(formData.hours) : 0)) >= 8 && formData.hours && !editingEntry && (
+                    <div style={{ fontSize: '11px', color: 'var(--success)', marginTop: '6px' }}>
+                      ? Daily requirement met!
+                    </div>
+                  )}
+                </div>
+
+                {/* Existing entries for this day */}
+                {!editingEntry && getProjectsForDate(selectedDate).length > 0 && (
+                  <div style={{ marginBottom: '16px' }}>
+                    <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '8px' }}>Logged entries:</div>
+                    <div style={{ fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {getProjectsForDate(selectedDate).filter(e => e.status !== 'REJECTED').map(e => (
+                        <div key={e.id} style={{ color: 'var(--text-secondary)' }}>
+                          {e.project_name || `Project ${e.project_id}`}: {parseFloat(e.hours).toFixed(1)}h
+                          {e.status !== 'PENDING' && (
+                            <span style={{ marginLeft: '8px', fontSize: '10px', padding: '2px 6px', borderRadius: '4px', background: e.status === 'APPROVED' ? 'rgba(34, 197, 94, 0.2)' : 'rgba(100, 116, 139, 0.2)', color: e.status === 'APPROVED' ? 'var(--success)' : 'var(--text-secondary)' }}>
+                              {e.status}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {editingEntry && (
+                  <div style={{ marginBottom: '16px', padding: '12px', borderRadius: '8px', background: 'rgba(59, 130, 246, 0.05)', border: '1px solid rgba(59, 130, 246, 0.3)' }}>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                      <strong>Original rejection reason:</strong>
+                    </div>
+                    <div style={{ fontSize: '13px', color: 'var(--error)', marginTop: '4px' }}>
+                      {editingEntry.rejection_reason || 'No reason provided'}
+                    </div>
+                  </div>
+                )}
+
+                <select className="form-select mb-4" value={formData.project_id} onChange={e => setFormData({ ...formData, project_id: e.target.value })} disabled={editingEntry} required>
+                  <option value="">Select Project</option>
+                  {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+                <input type="number" step="0.5" className="form-input mb-4" placeholder="Hours" value={formData.hours} onChange={e => setFormData({ ...formData, hours: e.target.value })} required />
+                <textarea className="form-input" placeholder={editingEntry ? "Explain how you've fixed the issue..." : "Notes (optional)"} rows="4" value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} />
+              </div>
+              <div className="modal-footer">
+                <button type="button" onClick={() => { setShowModal(false); setEditingEntry(null); }} className="btn btn-secondary">
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  {editingEntry ? 'Resubmit Entry' : 'Save Entry'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default Timesheets;
+
+
+
+============================================================
+FILE: \src\components\UserProvisioning.js
+============================================================
+
+import React, { useState, useEffect } from 'react';
+import { usersAPI } from '../services/api';
+import useAuthStore from '../stores/authStore';
+import {
+  Plus,
+  X,
+  Edit2,
+  Trash2,
+  Shield,
+  UserPlus,
+  Search,
+} from 'lucide-react';
+
+const UserProvisioning = () => {
+  const { isAdmin } = useAuthStore();
+  const [users, setUsers] = useState([]);
+  const [managers, setManagers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    parent_id: '',
+    roles: ['Member'],
+  });
+
+  useEffect(() => {
+    fetchUsers();
+    fetchManagers();
+  }, []);
+
+  const fetchUsers = async () => {
+    setLoading(true);
+    try {
+      const response = await usersAPI.list();
+      setUsers(response.data.data.users || []);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchManagers = async () => {
+    try {
+      const response = await usersAPI.getManagers();
+      setManagers(response.data.data || []);
+    } catch (error) {
+      console.error('Error fetching managers:', error);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (selectedUser) {
+        await usersAPI.update(selectedUser.id, {
+          name: formData.name,
+          email: formData.email,
+          parent_id: formData.parent_id || null,
+        });
+        await usersAPI.updateRoles(selectedUser.id, formData.roles);
+      } else {
+        await usersAPI.create(formData);
+      }
+      setShowModal(false);
+      setSelectedUser(null);
+      setFormData({ name: '', email: '', password: '', parent_id: '', roles: ['Member'] });
+      fetchUsers();
+    } catch (error) {
+      console.error('Error saving user:', error);
+      alert('Failed to save user. Email may already be registered.');
+    }
+  };
+
+  const handleEdit = (user) => {
+    setSelectedUser(user);
+    setFormData({
+      name: user.name,
+      email: user.email,
+      password: '',
+      parent_id: user.parent_id || '',
+      roles: user.roles.map(r => r.value),
+    });
+    setShowModal(true);
+  };
+
+  const handleDelete = async (userId) => {
+    if (window.confirm('Are you sure you want to deactivate this user?')) {
+      try {
+        await usersAPI.delete(userId);
+        fetchUsers();
+      } catch (error) {
+        console.error('Error deactivating user:', error);
+      }
+    }
+  };
+
+  const handleRoleChange = (role) => {
+    const currentRoles = [...formData.roles];
+    const index = currentRoles.indexOf(role);
+    if (index > -1) {
+      currentRoles.splice(index, 1);
+    } else {
+      currentRoles.push(role);
+    }
+    setFormData({ ...formData, roles: currentRoles });
+  };
+
+  const filteredUsers = users.filter(user =>
+    user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    user.email.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const getRoleBadgeClass = (role) => {
+    switch (role) {
+      case 'Admin':
+        return 'role-badge admin';
+      case 'Manager':
+        return 'role-badge manager';
+      default:
+        return 'role-badge member';
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="loading-container">
+        <div className="spinner"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <header className="header">
+        <div className="header-title">
+          <h2>User Provisioning</h2>
+          <p>Manage users and role assignments</p>
+        </div>
+        <div className="header-actions">
+          <div className="search-container">
+            <Search className="search-icon" size={18} />
+            <input
+              type="text"
+              className="form-input search-input"
+              placeholder="Search users..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          <button
+            className="btn btn-primary"
+            onClick={() => {
+              setSelectedUser(null);
+              setFormData({ name: '', email: '', password: '', parent_id: '', roles: ['Member'] });
+              setShowModal(true);
+            }}
+          >
+            <UserPlus size={18} />
+            Add User
+          </button>
+        </div>
+      </header>
+
+      <div className="page-content">
+        <div className="card">
+          <div className="card-header">
+            <h3 className="card-title">All Users ({filteredUsers.length})</h3>
+          </div>
+          <div className="table-container">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Email</th>
+                  <th>Roles</th>
+                  <th>Manager</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredUsers.map((user) => (
+                  <tr key={user.id}>
+                    <td>
+                      <div className="flex items-center gap-3">
+                        <div className="avatar">
+                          {user.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                        </div>
+                        <div>
+                          <div className="font-medium">{user.name}</div>
+                          <div className="text-xs text-muted">ID: {user.id}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td>{user.email}</td>
+                    <td>
+                      <div className="flex gap-1 flex-wrap">
+                        {user.roles.map((role) => (
+                          <span key={role.id} className={getRoleBadgeClass(role.value)}>
+                            {role.value}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td>{user.manager_name || '-'}</td>
+                    <td>
+                      <span className={`badge badge-${user.status ? 'active' : 'inactive'}`}>
+                        {user.status ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="flex gap-2">
+                        <button
+                          className="btn btn-icon"
+                          onClick={() => handleEdit(user)}
+                          title="Edit"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        <button
+                          className="btn btn-icon"
+                          onClick={() => handleDelete(user.id)}
+                          title="Deactivate"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Stats */}
+        <div className="stats-grid" style={{ marginTop: '24px' }}>
+          <div className="stat-card">
+            <div className="stat-card-header">
+              <div className="stat-icon teal">
+                <Shield size={24} />
+              </div>
+            </div>
+            <div className="stat-value">{users.filter(u => u.roles.some(r => r.value === 'Admin')).length}</div>
+            <div className="stat-label">Admins</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-card-header">
+              <div className="stat-icon blue">
+                <UserPlus size={24} />
+              </div>
+            </div>
+            <div className="stat-value">{users.filter(u => u.roles.some(r => r.value === 'Manager')).length}</div>
+            <div className="stat-label">Managers</div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-card-header">
+              <div className="stat-icon green">
+                <Shield size={24} />
+              </div>
+            </div>
+            <div className="stat-value">{users.filter(u => u.roles.some(r => r.value === 'Member')).length}</div>
+            <div className="stat-label">Members</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Add/Edit User Modal */}
+      {showModal && (
+        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">
+                {selectedUser ? 'Edit User' : 'Create New User'}
+              </h3>
+              <button className="btn btn-icon" onClick={() => setShowModal(false)}>
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleSubmit}>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label className="form-label">Full Name</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Enter full name"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Email Address</label>
+                  <input
+                    type="email"
+                    className="form-input"
+                    placeholder="Enter email address"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    required
+                  />
+                </div>
+
+                {!selectedUser && (
+                  <div className="form-group">
+                    <label className="form-label">Password</label>
+                    <input
+                      type="password"
+                      className="form-input"
+                      placeholder="Enter password"
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      required={!selectedUser}
+                    />
+                  </div>
+                )}
+
+                <div className="form-group">
+                  <label className="form-label">Reporting Manager</label>
+                  <select
+                    className="form-select"
+                    value={formData.parent_id}
+                    onChange={(e) => setFormData({ ...formData, parent_id: e.target.value })}
+                  >
+                    <option value="">No manager assigned</option>
+                    {managers.map((manager) => (
+                      <option key={manager.id} value={manager.id}>
+                        {manager.name} ({manager.email})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Roles</label>
+                  <div className="flex gap-4">
+                    {['Admin', 'Manager', 'Member'].map((role) => (
+                      <label key={role} className="checkbox-container">
+                        <div
+                          className={`checkbox ${formData.roles.includes(role) ? 'checked' : ''}`}
+                          onClick={() => handleRoleChange(role)}
+                        >
+                          {formData.roles.includes(role) && (
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                          )}
+                        </div>
+                        <span>{role}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  {selectedUser ? 'Update User' : 'Create User'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default UserProvisioning;
+
+
+
+
+
+
+
+============================================================
+FILE: \src\lib\api.ts
+============================================================
+
+import axios from 'axios';
+
+const API_BASE = "https://timetracker-api-m8k7.onrender.com/api";
+
+const api = axios.create({
+  baseURL: API_BASE,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Add a request interceptor to attach the JWT token
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+export const authApi = {
+  login: async (email, password) => {
+    // Corrected: Removed the double '/auth/auth'
+    const result = await api.post('/auth/login', { email, password });
+    
+    // Mapping the successful backend response to your frontend store
+    return {
+      profile: {
+        id: result.data.data.profile.id,
+        name: result.data.data.profile.name,
+        email: result.data.data.profile.email,
+        roles: result.data.data.profile.roles
+      },
+      token: result.data.data.token
+    };
+  },
+  
+  register: async (userData) => {
+    const result = await api.post('/auth/register', userData);
+    return result.data;
+  },
+
+  me: async () => {
+    // Corrected: Removed the double '/users/users'
+    const response = await api.get('/users/me');
+    return response.data;
+  }
+};
+
+export const usersAPI = {
+  list: () => api.get('/users'),
+  getManagers: () => api.get('/users/managers/list'),
+  create: (data) => api.post('/users', data),
+  update: (id, data) => api.put(`/users/${id}`, data),
+  delete: (id) => api.delete(`/users/${id}`),
+};
+
+export const projectsAPI = {
+  list: () => api.get('/projects'),
+  create: (data) => api.post('/projects', data),
+  getMembers: (id) => api.get(`/projects/${id}/members`),
+};
+
+export const timeEntriesAPI = {
+  list: (params) => api.get('/time-entries', { params }),
+  create: (data) => api.post('/time-entries', data),
+  getPendingApprovals: () => api.get('/time-entries/pending/approvals'),
+  approve: (id, data) => api.post(`/time-entries/${id}/approve`, data),
+  reject: (id, data) => api.post(`/time-entries/${id}/reject`, data),
+};
+
+export const reportsAPI = {
+  getSummary: (params) => api.get('/reports/summary', { params }),
+  getByReportingArea: (params) => api.get('/reports/by-area', { params }),
+};
+
+export default api;
+
+
+
+============================================================
+FILE: \src\lib\apiWithFallback.js
+============================================================
+
+// API wrapper with fallback to Supabase
+import api from './api';
+import supabaseService from '../lib/supabase';
+
+const ENABLE_SUPABASE_FALLBACK = process.env.REACT_APP_ENABLE_SUPABASE_FALLBACK === 'true';
+const API_TIMEOUT = 5000; // 5 seconds timeout before trying Supabase
+
+// Helper to add timeout to promises
+const withTimeout = (promise, timeoutMs) => {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Request timeout')), timeoutMs)
+    )
+  ]);
+};
+
+// Fallback API wrapper
+export const apiWithFallback = {
+  // Time Entries
+  async getTimeEntries(filters) {
+    if (!ENABLE_SUPABASE_FALLBACK) {
+      return api.get('/time-entries', { params: filters });
+    }
+
+    try {
+      // Try backend first with timeout
+      return await withTimeout(
+        api.get('/time-entries', { params: filters }),
+        API_TIMEOUT
+      );
+    } catch (error) {
+      console.warn('Backend timeout/error, trying Supabase:', error.message);
+      try {
+        const data = await supabaseService.getTimeEntries(filters);
+        return { data: { data: { entries: data } } };
+      } catch (supabaseError) {
+        console.error('Supabase fallback failed:', supabaseError);
+        throw error;
+      }
+    }
+  },
+
+  async createTimeEntry(data) {
+    if (!ENABLE_SUPABASE_FALLBACK) {
+      return api.post('/time-entries', data);
+    }
+
+    try {
+      return await withTimeout(
+        api.post('/time-entries', data),
+        API_TIMEOUT
+      );
+    } catch (error) {
+      console.warn('Backend timeout/error, trying Supabase:', error.message);
+      try {
+        const entry = await supabaseService.createTimeEntry(data);
+        return { data: { data: entry } };
+      } catch (supabaseError) {
+        console.error('Supabase fallback failed:', supabaseError);
+        throw error;
+      }
+    }
+  },
+
+  // Projects
+  async getProjects(filters) {
+    if (!ENABLE_SUPABASE_FALLBACK) {
+      return api.get('/projects', { params: filters });
+    }
+
+    try {
+      return await withTimeout(
+        api.get('/projects', { params: filters }),
+        API_TIMEOUT
+      );
+    } catch (error) {
+      console.warn('Backend timeout/error, trying Supabase:', error.message);
+      try {
+        const data = await supabaseService.getProjects();
+        return { data: { data: { projects: data } } };
+      } catch (supabaseError) {
+        console.error('Supabase fallback failed:', supabaseError);
+        throw error;
+      }
+    }
+  },
+
+  // Users
+  async getUsers(filters) {
+    if (!ENABLE_SUPABASE_FALLBACK) {
+      return api.get('/users', { params: filters });
+    }
+
+    try {
+      return await withTimeout(
+        api.get('/users', { params: filters }),
+        API_TIMEOUT
+      );
+    } catch (error) {
+      console.warn('Backend timeout/error, trying Supabase:', error.message);
+      try {
+        const data = await supabaseService.getUsers();
+        return { data: { data: data } };
+      } catch (supabaseError) {
+        console.error('Supabase fallback failed:', supabaseError);
+        throw error;
+      }
+    }
+  },
+
+  // Reports
+  async getReports(filters) {
+    if (!ENABLE_SUPABASE_FALLBACK) {
+      return api.get('/reports/summary', { params: filters });
+    }
+
+    try {
+      return await withTimeout(
+        api.get('/reports/summary', { params: filters }),
+        API_TIMEOUT
+      );
+    } catch (error) {
+      console.warn('Backend timeout/error, trying Supabase:', error.message);
+      try {
+        const data = await supabaseService.getReports(filters);
+        // Transform to match API response format
+        return { data: { data: { entries: data } } };
+      } catch (supabaseError) {
+        console.error('Supabase fallback failed:', supabaseError);
+        throw error;
+      }
+    }
+  },
+};
+
+export default apiWithFallback;
+
+
+
+
+============================================================
+FILE: \src\lib\supabase.js
+============================================================
+
+// Direct Supabase connection (fallback when backend is down)
+// NOTE: This requires @supabase/supabase-js client library
+// Install with: npm install @supabase/supabase-js
+
+const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY;
+
+let supabase = null;
+
+// Lazy load Supabase client only when needed
+const getSupabaseClient = async () => {
+  if (supabase) return supabase;
+  
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    console.warn('Supabase credentials not configured');
+    return null;
+  }
+
+  try {
+    const { createClient } = await import('@supabase/supabase-js');
+    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    return supabase;
+  } catch (error) {
+    console.error('Failed to initialize Supabase client:', error);
+    return null;
+  }
+};
+
+export const supabaseService = {
+  // Get the authenticated Supabase client
+  async getClient() {
+    return getSupabaseClient();
+  },
+
+  // Get current user session
+  async getSession() {
+    const client = await getSupabaseClient();
+    if (!client) return null;
+    
+    const token = localStorage.getItem('token');
+    if (!token) return null;
+    
+    return { token };
+  },
+
+  // Query time entries
+  async getTimeEntries(filters) {
+    const client = await getSupabaseClient();
+    if (!client) throw new Error('Supabase client not available');
+
+    const token = localStorage.getItem('token');
+    if (!token) throw new Error('Not authenticated');
+
+    let query = client
+      .from('time_entries')
+      .select('*');
+
+    if (filters?.start_date) {
+      query = query.gte('work_date', filters.start_date);
+    }
+    if (filters?.end_date) {
+      query = query.lte('work_date', filters.end_date);
+    }
+    if (filters?.user_id) {
+      query = query.eq('user_id', filters.user_id);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data;
+  },
+
+  // Create time entry
+  async createTimeEntry(data) {
+    const client = await getSupabaseClient();
+    if (!client) throw new Error('Supabase client not available');
+
+    const token = localStorage.getItem('token');
+    if (!token) throw new Error('Not authenticated');
+
+    const { data: entry, error } = await client
+      .from('time_entries')
+      .insert([{ ...data, status: 'PENDING' }])
+      .select();
+
+    if (error) throw error;
+    return entry;
+  },
+
+  // Get projects
+  async getProjects() {
+    const client = await getSupabaseClient();
+    if (!client) throw new Error('Supabase client not available');
+
+    const token = localStorage.getItem('token');
+    if (!token) throw new Error('Not authenticated');
+
+    const { data, error } = await client
+      .from('projects')
+      .select('*');
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Get users
+  async getUsers() {
+    const client = await getSupabaseClient();
+    if (!client) throw new Error('Supabase client not available');
+
+    const token = localStorage.getItem('token');
+    if (!token) throw new Error('Not authenticated');
+
+    const { data, error } = await client
+      .from('users')
+      .select('*');
+
+    if (error) throw error;
+    return data;
+  },
+
+  // Get reports
+  async getReports(filters) {
+    const client = await getSupabaseClient();
+    if (!client) throw new Error('Supabase client not available');
+
+    const token = localStorage.getItem('token');
+    if (!token) throw new Error('Not authenticated');
+
+    let query = client
+      .from('time_entries')
+      .select('*')
+      .eq('status', 'APPROVED');
+
+    if (filters?.start_date) {
+      query = query.gte('work_date', filters.start_date);
+    }
+    if (filters?.end_date) {
+      query = query.lte('work_date', filters.end_date);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return data;
+  },
+};
+
+export default supabaseService;
+
+
+
+
+============================================================
+FILE: \src\services\api.js
+============================================================
+
+import axios from 'axios';
+
+// Ensure this matches your Render URL in Vercel Environment Variables
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://timetracker-api-m8k7.onrender.com/api';
+
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Request interceptor to add auth token
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Response interceptor to handle errors
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.href = '/';
+    }
+    return Promise.reject(error);
+  }
+);
+
+// Auth API
+export const authAPI = {
+  // Corrected path and data mapping
+  login: async (email, password) => {
+    const response = await api.post('/auth/login', { email, password });
+    return response; 
+  },
+  register: (data) => api.post('/auth/register', data),
+  verifyEmail: (token) => api.get(`/auth/verify-email?token=${token}`),
+  resendVerification: (email) => api.post('/auth/resend-verification', null, { params: { email } }),
+  requestPasswordReset: (email) => api.post('/auth/request-password-reset', { email }),
+  resetPassword: (token, newPassword) => api.post('/auth/reset-password', { token, new_password: newPassword }),
+  // Corrected path
+  getCurrentUser: () => api.get('/users/me'),
+};
+
+// Users API
+export const usersAPI = {
+  list: (params) => api.get('/users', { params }),
+  get: (id) => api.get(`/users/${id}`),
+  create: (data) => api.post('/users', data),
+  update: (id, data) => api.put(`/users/${id}`, data),
+  delete: (id) => api.delete(`/users/${id}`),
+  updateRoles: (id, roles) => api.put(`/users/${id}/roles`, roles),
+  getManagers: () => api.get('/users/managers/list'),
+  resetPassword: (id, newPassword) => api.post(`/users/${id}/reset-password`, { new_password: newPassword }),
+};
+
+// Projects API
+export const projectsAPI = {
+  // Removed redundant /projects/projects
+  list: (params) => api.get('/projects', { params }),
+  get: (id) => api.get(`/projects/${id}`),
+  create: (data) => api.post('/projects', data),
+  update: (id, data) => api.put(`/projects/${id}`, data),
+  delete: (id) => api.delete(`/projects/${id}`),
+  getMembers: (id) => api.get(`/projects/${id}/members`),
+  addMember: (id, data) => api.post(`/projects/${id}/members`, data),
+  removeMember: (projectId, userId) => api.delete(`/projects/${projectId}/members/${userId}`),
+};
+
+// Time Entries API
+export const timeEntriesAPI = {
+  // Removed redundant /time-entries/time-entries
+  list: (params) => api.get('/time-entries', { params }),
+  get: (id) => api.get(`/time-entries/${id}`),
+  create: (data) => api.post('/time-entries', data),
+  update: (id, data) => api.put(`/time-entries/${id}`, data),
+  delete: (id) => api.delete(`/time-entries/${id}`),
+  approve: (id, data) => api.post(`/time-entries/${id}/approve`, data),
+  resubmit: (id, data) => api.post(`/time-entries/${id}/resubmit`, data),
+  getPendingApprovals: () => api.get('/time-entries/pending/approvals'),
+};
+
+// Reports API
+export const reportsAPI = {
+  getSummary: (params) => api.get('/reports/summary', { params }),
+  getDaily: (params) => api.get('/reports/daily', { params }),
+  getByReportingArea: (params) => api.get('/reports/by-reporting-area', { params }),
+  getUserReport: (userId, params) => api.get(`/reports/user/${userId}`, { params }),
+};
+
+export default api;
+
+
+
+============================================================
+FILE: \src\stores\authStore.js
+============================================================
+
+import { create } from 'zustand';
+import { authAPI } from '../services/api';
+
+const useAuthStore = create((set, get) => ({
+  user: JSON.parse(localStorage.getItem('user')) || null,
+  token: localStorage.getItem('token') || null,
+  isAuthenticated: !!localStorage.getItem('token'),
+  loading: false,
+  error: null,
+
+  login: async (email, password) => {
+    set({ loading: true, error: null });
+    try {
+      const response = await authAPI.login(email, password);
+      const { data } = response.data;
+      
+      if (response.data.status === 'error') {
+        set({ loading: false, error: response.data.message });
+        return false;
+      }
+
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.profile));
+      
+      set({
+        user: data.profile,
+        token: data.token,
+        isAuthenticated: true,
+        loading: false,
+        error: null,
+      });
+      
+      return true;
+    } catch (error) {
+      const message = error.response?.data?.message || 'Login failed';
+      set({ loading: false, error: message });
+      return false;
+    }
+  },
+
+  register: async (userData) => {
+    set({ loading: true, error: null });
+    try {
+      const response = await authAPI.register(userData);
+      
+      if (response.data.status === 'error') {
+        set({ loading: false, error: response.data.message });
+        return false;
+      }
+
+      set({ loading: false });
+      return true;
+    } catch (error) {
+      const message = error.response?.data?.message || 'Registration failed';
+      set({ loading: false, error: message });
+      return false;
+    }
+  },
+
+  logout: () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    set({
+      user: null,
+      token: null,
+      isAuthenticated: false,
+      error: null,
+    });
+  },
+
+  fetchCurrentUser: async () => {
+    try {
+      const response = await authAPI.getCurrentUser();
+      const user = response.data.data;
+      localStorage.setItem('user', JSON.stringify(user));
+      set({ user });
+    } catch (error) {
+      console.error('Failed to fetch current user:', error);
+    }
+  },
+
+  hasRole: (roleName) => {
+    const user = get().user;
+    if (!user || !user.roles) return false;
+    return user.roles.some(role => role.value === roleName);
+  },
+
+  isAdmin: () => get().hasRole('Admin'),
+  isManager: () => get().hasRole('Manager'),
+  isMember: () => get().hasRole('Member'),
+
+  clearError: () => set({ error: null }),
+}));
+
+export default useAuthStore;
+
+
+
+
+
+
+
+============================================================
+FILE: \src\styles\index.css
+============================================================
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --primary: #0d9488;
+  --primary-dark: #0f766e;
+  --primary-light: #14b8a6;
+  --secondary: #0891b2;
+  --accent: #06b6d4;
+  --background: #f8fafc;
+  --surface: #ffffff;
+  --text-primary: #0f172a;
+  --text-secondary: #64748b;
+  --text-muted: #94a3b8;
+  --border: #e2e8f0;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --error: #ef4444;
+  --pending: #f59e0b;
+  --approved: #10b981;
+  --rejected: #ef4444;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+  background: var(--background);
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
+/* Layout */
+.app-container {
+  min-height: 100vh;
+  display: flex;
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.page-content {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 260px;
+  background: linear-gradient(180deg, #0d9488 0%, #0891b2 100%);
+  color: white;
+  display: flex;
+  flex-direction: column;
+  padding: 24px 0;
+  min-height: 100vh;
+}
+
+.sidebar-logo {
+  padding: 0 24px 32px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 24px;
+}
+
+.sidebar-logo h1 {
+  font-size: 24px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sidebar-logo span {
+  font-weight: 300;
+  opacity: 0.9;
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 0 12px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: 4px;
+}
+
+.nav-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.nav-item.active {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  font-weight: 500;
+}
+
+.sidebar-footer {
+  padding: 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin-top: auto;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+}
+
+.user-details {
+  flex: 1;
+}
+
+.user-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.user-role {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+/* Header */
+.header {
+  background: var(--surface);
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.header-title h2 {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.header-title p {
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+}
+
+/* Cards */
+.card {
+  background: var(--surface);
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--border);
+}
+
+.card-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.card-title {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.card-body {
+  padding: 24px;
+}
+
+/* Buttons */
+.btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%);
+  color: white;
+}
+
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(13, 148, 136, 0.3);
+}
+
+.btn-secondary {
+  background: var(--background);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
+.btn-secondary:hover {
+  background: var(--border);
+}
+
+.btn-success {
+  background: var(--success);
+  color: white;
+}
+
+.btn-danger {
+  background: var(--error);
+  color: white;
+}
+
+.btn-sm {
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.btn-icon {
+  padding: 8px;
+  border-radius: 8px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.2s;
+}
+
+.btn-icon:hover {
+  background: var(--background);
+  color: var(--text-primary);
+}
+
+/* Forms */
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-label {
+  display: block;
+  font-weight: 500;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.form-input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  transition: all 0.2s;
+  background: var(--surface);
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.1);
+}
+
+.form-select {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.form-select:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+/* Tables */
+.table-container {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--border);
+  background: var(--background);
+}
+
+.table td {
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.table tr:hover {
+  background: rgba(13, 148, 136, 0.02);
+}
+
+/* Status Badges */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.badge-pending {
+  background: rgba(245, 158, 11, 0.1);
+  color: #b45309;
+}
+
+.badge-approved {
+  background: rgba(16, 185, 129, 0.1);
+  color: #047857;
+}
+
+.badge-rejected {
+  background: rgba(239, 68, 68, 0.1);
+  color: #b91c1c;
+}
+
+.badge-active {
+  background: rgba(16, 185, 129, 0.1);
+  color: #047857;
+}
+
+.badge-inactive {
+  background: rgba(100, 116, 139, 0.1);
+  color: #475569;
+}
+
+/* Stats Cards */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 24px;
+  border: 1px solid var(--border);
+}
+
+.stat-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.stat-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stat-icon.teal {
+  background: rgba(13, 148, 136, 0.1);
+  color: var(--primary);
+}
+
+.stat-icon.blue {
+  background: rgba(8, 145, 178, 0.1);
+  color: var(--secondary);
+}
+
+.stat-icon.green {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--success);
+}
+
+.stat-icon.orange {
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--warning);
+}
+
+.stat-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.stat-label {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin-top: 4px;
+}
+
+/* Login Page */
+.login-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #0d9488 0%, #0891b2 50%, #06b6d4 100%);
+}
+
+.login-card {
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 48px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+}
+
+.login-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.login-logo {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 8px;
+}
+
+.login-subtitle {
+  color: var(--text-secondary);
+}
+
+.login-form .btn-primary {
+  width: 100%;
+  padding: 14px;
+  font-size: 16px;
+  margin-top: 24px;
+}
+
+.login-error {
+  background: rgba(239, 68, 68, 0.1);
+  color: #b91c1c;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
+/* Calendar */
+.calendar-container {
+  background: var(--surface);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  padding: 24px;
+}
+
+.calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.calendar-title {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.calendar-nav {
+  display: flex;
+  gap: 8px;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.calendar-day-header {
+  text-align: center;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 12px;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.calendar-day {
+  min-height: 100px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.calendar-day:hover {
+  background: var(--background);
+  border-color: var(--primary);
+}
+
+.calendar-day.today {
+  background: rgba(13, 148, 136, 0.05);
+  border-color: var(--primary);
+}
+
+.calendar-day.other-month {
+  background: var(--background);
+  opacity: 0.5;
+}
+
+.calendar-day-number {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.calendar-entry {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.calendar-entry.pending {
+  background: rgba(245, 158, 11, 0.2);
+  color: #92400e;
+}
+
+.calendar-entry.approved {
+  background: rgba(16, 185, 129, 0.2);
+  color: #065f46;
+}
+
+.calendar-entry.rejected {
+  background: rgba(239, 68, 68, 0.2);
+  color: #991b1b;
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: var(--surface);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header {
+  padding: 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-title {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.modal-body {
+  padding: 24px;
+}
+
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+/* Charts */
+.chart-container {
+  position: relative;
+  height: 300px;
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 48px 24px;
+}
+
+.empty-state-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 16px;
+  color: var(--text-muted);
+}
+
+.empty-state-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.empty-state-text {
+  color: var(--text-secondary);
+  margin-bottom: 24px;
+}
+
+/* Toast */
+.toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 1100;
+}
+
+.toast {
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 16px 20px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  animation: slideIn 0.3s ease;
+}
+
+.toast.success {
+  border-left: 4px solid var(--success);
+}
+
+.toast.error {
+  border-left: 4px solid var(--error);
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .sidebar {
+    display: none;
+  }
+  
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .header {
+    flex-direction: column;
+    gap: 16px;
+    align-items: flex-start;
+  }
+}
+
+/* Loading Spinner */
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--border);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
+}
+
+.tab {
+  padding: 12px 24px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.tab:hover {
+  color: var(--text-primary);
+}
+
+.tab.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+}
+
+/* Search */
+.search-container {
+  position: relative;
+}
+
+.search-input {
+  padding-left: 40px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+}
+
+/* Dropdown */
+.dropdown {
+  position: relative;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: var(--surface);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  border: 1px solid var(--border);
+  min-width: 180px;
+  z-index: 100;
+}
+
+.dropdown-item {
+  padding: 12px 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.2s;
+}
+
+.dropdown-item:hover {
+  background: var(--background);
+}
+
+/* Toggle */
+.toggle {
+  position: relative;
+  width: 48px;
+  height: 24px;
+  background: var(--border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.toggle.active {
+  background: var(--primary);
+}
+
+.toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+
+.toggle.active .toggle-knob {
+  transform: translateX(24px);
+}
+
+/* Role Badge */
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.role-badge.admin {
+  background: rgba(239, 68, 68, 0.1);
+  color: #b91c1c;
+}
+
+.role-badge.manager {
+  background: rgba(8, 145, 178, 0.1);
+  color: #0e7490;
+}
+
+.role-badge.member {
+  background: rgba(100, 116, 139, 0.1);
+  color: #475569;
+}
+
+/* Checkbox */
+.checkbox-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.checkbox {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.checkbox.checked {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.checkbox.checked svg {
+  color: white;
+}
+
+/* Avatar */
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #0d9488, #0891b2);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+}
+
+.avatar-sm {
+  width: 32px;
+  height: 32px;
+  font-size: 12px;
+}
+
+.avatar-lg {
+  width: 56px;
+  height: 56px;
+  font-size: 20px;
+}
+
+/* Divider */
+.divider {
+  height: 1px;
+  background: var(--border);
+  margin: 16px 0;
+}
+
+/* Text utilities */
+.text-primary { color: var(--text-primary); }
+.text-secondary { color: var(--text-secondary); }
+.text-muted { color: var(--text-muted); }
+.text-success { color: var(--success); }
+.text-error { color: var(--error); }
+.text-warning { color: var(--warning); }
+
+.font-medium { font-weight: 500; }
+.font-semibold { font-weight: 600; }
+.font-bold { font-weight: 700; }
+
+.text-sm { font-size: 14px; }
+.text-xs { font-size: 12px; }
+.text-lg { font-size: 18px; }
+
+/* Spacing utilities */
+.mt-1 { margin-top: 4px; }
+.mt-2 { margin-top: 8px; }
+.mt-3 { margin-top: 12px; }
+.mt-4 { margin-top: 16px; }
+.mb-1 { margin-bottom: 4px; }
+.mb-2 { margin-bottom: 8px; }
+.mb-3 { margin-bottom: 12px; }
+.mb-4 { margin-bottom: 16px; }
+
+.flex { display: flex; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.gap-1 { gap: 4px; }
+.gap-2 { gap: 8px; }
+.gap-3 { gap: 12px; }
+.gap-4 { gap: 16px; }
+
+.w-full { width: 100%; }
+
+
+
+
+
+
+
+============================================================
+FILE: \src\App.js
+============================================================
+
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import useAuthStore from './stores/authStore';
+import Login from './components/Login';
+import Register from './components/Register';
+import ForgotPassword from './components/ForgotPassword';
+import ResetPassword from './components/ResetPassword';
+import Dashboard from './components/Dashboard';
+import Timesheets from './components/Timesheets';
+import Approvals from './components/Approvals';
+import Projects from './components/Projects';
+import Reports from './components/Reports';
+import UserProvisioning from './components/UserProvisioning';
+import Layout from './components/Layout';
+
+function App() {
+  const { isAuthenticated, fetchCurrentUser, token } = useAuthStore();
+  const [initializing, setInitializing] = useState(true);
+
+  useEffect(() => {
+    const init = async () => {
+      if (token) {
+        await fetchCurrentUser();
+      }
+      setInitializing(false);
+    };
+    init();
+  }, [token, fetchCurrentUser]);
+
+  if (initializing) {
+    return (
+      <div className="loading-container">
+        <div className="spinner"></div>
+      </div>
+    );
+  }
+
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route
+          path="/"
+          element={
+            isAuthenticated ? (
+              <Navigate to="/dashboard" replace />
+            ) : (
+              <Login />
+            )
+          }
+        />
+        <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route
+          path="/*"
+          element={
+            isAuthenticated ? (
+              <Layout>
+                <Routes>
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/timesheets" element={<Timesheets />} />
+                  <Route path="/approvals" element={<Approvals />} />
+                  <Route path="/projects" element={<Projects />} />
+                  <Route path="/reports" element={<Reports />} />
+                  <Route path="/users" element={<UserProvisioning />} />
+                </Routes>
+              </Layout>
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
+export default App;
+
+
+
+
+
+
+
+============================================================
+FILE: \src\index.js
+============================================================
+
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import './styles/index.css';
+import App from './App';
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+
+
+
+
+
+
+
+============================================================
+FILE: \package.json
+============================================================
+
+{
+  "name": "timetracker-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.22.0",
+    "react-scripts": "5.0.1",
+    "axios": "^1.6.7",
+    "zustand": "^4.5.0",
+    "date-fns": "^3.3.1",
+    "lucide-react": "^0.323.0",
+    "react-calendar": "^4.8.0"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "proxy": "http://localhost:8000"
+}
+
+
+
+
+
+
+
+
+============================================================
+FILE: \vercel.json
+============================================================
+
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "build",
+  "framework": null,
+  "env": {
+    "REACT_APP_API_URL": "https://timetracker-api-m8k7.onrender.com"
+  },
+  "rewrites": [
+    {"source": "/(.*)", "destination": "/index.html"}
+  ]
+}
+
+

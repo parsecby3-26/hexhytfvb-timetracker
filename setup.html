@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>hexhytfvb Setup Assistant</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #7c3aed;
+            --primary-dark: #6d28d9;
+            --background: #f8f7ff;
+            --surface: #ffffff;
+            --text: #1e1b4b;
+            --border: #e0e7ff;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--background);
+            color: var(--text);
+            margin: 0;
+            padding: 40px 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            max-width: 800px;
+            width: 100%;
+            background: var(--surface);
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(124, 58, 237, 0.1);
+            border: 1px solid var(--border);
+        }
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        h1 {
+            color: var(--primary);
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+        }
+        .section-title {
+            font-weight: 700;
+            font-size: 18px;
+            margin-bottom: 20px;
+            color: var(--primary-dark);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            font-weight: 500;
+            font-size: 14px;
+            margin-bottom: 6px;
+        }
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
+        }
+        .btn {
+            background: var(--primary);
+            color: white;
+            padding: 14px 28px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            font-size: 16px;
+            transition: all 0.2s;
+        }
+        .btn:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+        }
+        .output-area {
+            margin-top: 30px;
+            display: none;
+        }
+        pre {
+            background: #1e1b4b;
+            color: #a78bfa;
+            padding: 20px;
+            border-radius: 12px;
+            overflow-x: auto;
+            position: relative;
+        }
+        .copy-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255,255,255,0.1);
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .guide-link {
+            font-size: 12px;
+            color: var(--primary);
+            text-decoration: none;
+            margin-top: 5px;
+            display: inline-block;
+        }
+        .guide-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>hexhytfvb TimeTracker</h1>
+            <p>Infrastructure Setup Assistant</p>
+        </header>
+
+        <div class="section">
+            <div class="section-title">🗄️ Supabase Configuration</div>
+            <div class="form-group">
+                <label>Database URL (PostgreSQL Connection String)</label>
+                <input type="text" id="db_url" placeholder="postgresql://postgres.xxxxxx:password@xxxxxx.pooler.supabase.com:6543/postgres">
+                <a href="https://supabase.com/dashboard/project/_/settings/database" target="_blank" class="guide-link">Get from Supabase Dashboard → Settings → Database</a>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">📧 Email (SMTP) Configuration</div>
+            <div class="form-group">
+                <label>SMTP User (Email Address)</label>
+                <input type="text" id="smtp_user" placeholder="your-email@gmail.com">
+            </div>
+            <div class="form-group">
+                <label>SMTP Password (App Password)</label>
+                <input type="password" id="smtp_pass" placeholder="xxxx xxxx xxxx xxxx">
+                <a href="https://myaccount.google.com/apppasswords" target="_blank" class="guide-link">Generate Gmail App Password →</a>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">🚀 Deployment URLs</div>
+            <div class="form-group">
+                <label>Backend API URL (Render)</label>
+                <input type="text" id="backend_url" placeholder="https://your-api.onrender.com">
+                <a href="https://dashboard.render.com" target="_blank" class="guide-link">Get from Render Dashboard → Your Web Service URL</a>
+            </div>
+            <div class="form-group">
+                <label>Frontend URL (Vercel)</label>
+                <input type="text" id="frontend_url" placeholder="https://your-app.vercel.app">
+            </div>
+        </div>
+
+        <button class="btn" onclick="generateConfig()">Generate Configuration</button>
+
+        <div id="output" class="output-area">
+            <div class="section-title">✅ Generated .env Content</div>
+            
+            <p style="font-size: 14px; font-weight: 600; margin-top: 20px;">For backend/.env:</p>
+            <pre id="env_backend"><button class="copy-btn" onclick="copyText('code_backend')">Copy</button><code id="code_backend"></code></pre>
+
+            <p style="font-size: 14px; font-weight: 600; margin-top: 20px;">For Frontend (Vercel Environment Variables):</p>
+            <pre id="env_frontend"><button class="copy-btn" onclick="copyText('code_frontend')">Copy</button><code id="code_frontend"></code></pre>
+        </div>
+    </div>
+
+    <script>
+        function generateConfig() {
+            const db_url = document.getElementById('db_url').value || 'REPLACE_WITH_DB_URL';
+            const smtp_user = document.getElementById('smtp_user').value || 'REPLACE_WITH_EMAIL';
+            const smtp_pass = document.getElementById('smtp_pass').value || 'REPLACE_WITH_APP_PASSWORD';
+            const backend_url = document.getElementById('backend_url').value || 'https://your-api.onrender.com';
+            const frontend_url = document.getElementById('frontend_url').value || 'https://your-app.vercel.app';
+            
+            // Backend .env
+            const backend_env = `DATABASE_URL=${db_url}
+JWT_SECRET_KEY=${Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15)}
+JWT_ALGORITHM=HS256
+
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=${smtp_user}
+SMTP_PASSWORD=${smtp_pass}
+SMTP_FROM="hexhytfvb TimeTracker <${smtp_user}>"
+
+FRONTEND_URL=${frontend_url}
+CRON_SECRET=hexhytfvb_secure_${Math.floor(Math.random() * 1000)}`;
+
+            // Frontend Env
+            const frontend_env = `REACT_APP_API_URL=${backend_url}/api`;
+
+            document.getElementById('code_backend').innerText = backend_env;
+            document.getElementById('code_frontend').innerText = frontend_env;
+            document.getElementById('output').style.display = 'block';
+            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+        }
+
+        function copyText(id) {
+            const text = document.getElementById(id).innerText;
+            navigator.clipboard.writeText(text);
+            alert('Copied to clipboard!');
+        }
+    </script>
+</body>
+</html>

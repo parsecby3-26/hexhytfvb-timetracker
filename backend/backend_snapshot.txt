@@ -1,0 +1,3673 @@
+
+--- FILE: \add_password_reset_columns.sql ---
+
+-- SQL Migration: Add password reset fields to users table
+-- Run this directly in Supabase SQL Editor if Alembic migration fails
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token_expires TIMESTAMP;
+
+-- Verify columns were added
+SELECT column_name, data_type 
+FROM information_schema.columns 
+WHERE table_name = 'users' 
+ORDER BY ordinal_position;
+
+
+--- FILE: \alembic.ini ---
+
+# Alembic Configuration for Render/PostgreSQL
+
+[alembic]
+# Points to the alembic folder relative to this file
+script_location = alembic
+prepend_sys_path = .
+version_path_separator = os
+
+# Placeholder URL. The real URL is injected dynamically via env.py
+sqlalchemy.url = postgresql://user:pass@localhost/dbname
+
+[post_write_hooks]
+
+[loggers]
+keys = root,sqlalchemy,alembic
+
+[handlers]
+keys = console
+
+[formatters]
+keys = generic
+
+[logger_root]
+level = WARN
+handlers = console
+qualname =
+
+[logger_sqlalchemy]
+level = WARN
+handlers =
+qualname = sqlalchemy.engine
+
+[logger_alembic]
+level = INFO
+handlers =
+qualname = alembic
+
+[handler_console]
+class = StreamHandler
+args = (sys.stderr,)
+level = NOTSET
+formatter = generic
+
+[formatter_generic]
+format = %(levelname)-5.5s [%(name)s] %(message)s
+datefmt = %H:%M:%S
+
+--- FILE: \database_migration.sql ---
+
+-- Comprehensive Supabase Database Migration
+-- Run this in Supabase SQL Editor to ensure all tables have the correct schema
+-- This file contains all necessary ALTER TABLE statements
+
+-- =========================================
+-- Users Table - Add Missing Columns
+-- =========================================
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_reset_token_expires TIMESTAMP;
+
+-- Verify users table has all required columns
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns 
+WHERE table_name = 'users' 
+ORDER BY ordinal_position;
+
+-- =========================================
+-- Time Entries Table - Verify Structure
+-- =========================================
+-- These should already exist from 0001_initial_migration.py
+-- But this verifies they are present
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns 
+WHERE table_name = 'time_entries' 
+ORDER BY ordinal_position;
+
+-- =========================================
+-- Projects Table - Verify Structure
+-- =========================================
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns 
+WHERE table_name = 'projects' 
+ORDER BY ordinal_position;
+
+
+--- FILE: \db_tool.py ---
+
+import psycopg2
+import sys
+from psycopg2.extras import RealDictCursor
+
+# UPDATED with your new password
+DB_URL = "postgresql://postgres.vjjbjyllpedhgtrzivdd:ticksheet123!@aws-1-ap-northeast-1.pooler.supabase.com:6543/postgres"
+
+def get_conn():
+    return psycopg2.connect(DB_URL)
+
+def run_query(sql):
+    try:
+        conn = get_conn()
+        conn.autocommit = True
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(sql)
+            if sql.strip().upper().startswith("SELECT"):
+                rows = cur.fetchall()
+                for row in rows: print(row)
+            else:
+                print("Success: Command executed.")
+        conn.close()
+    except Exception as e:
+        print(f"Error: {e}")
+
+def seed():
+    print("Starting Direct Terminal Seed...")
+    # 1. Create Roles
+    run_query("INSERT INTO roles (name) VALUES ('Admin'), ('Manager'), ('Member') ON CONFLICT DO NOTHING;")
+    
+    # 2. Create Admin (Password_hash is a placeholder; backend will handle real hashes)
+    run_query("""
+        INSERT INTO users (email, password_hash, first_name, last_name, is_verified, role_id) 
+        VALUES ('admin@tickmarks.com', 'placeholder_hash', 'Admin', 'User', true, 1) 
+        ON CONFLICT (email) DO NOTHING;
+    """)
+    print("Seed process finished.")
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Usage: python db_tool.py seed  OR  python db_tool.py \"SELECT...\"")
+    elif sys.argv[1] == "seed":
+        seed()
+    else:
+        run_query(sys.argv[1])
+
+
+--- FILE: \debug_login.py ---
+
+import sys
+import os
+# Add the current directory to sys.path to import app
+sys.path.append(os.getcwd())
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from app.models.models import Base, User, Role, UserRole
+from app.core.security import hash_password, verify_password, create_access_token
+from app.api.auth import get_user_profile
+from datetime import datetime
+
+# Setup in-memory database
+engine = create_engine("sqlite:///:memory:")
+SessionLocal = sessionmaker(bind=engine)
+Base.metadata.create_all(bind=engine)
+
+db = SessionLocal()
+
+try:
+    # Create seed data
+    admin_role = Role(name="Admin")
+    db.add(admin_role)
+    db.commit()
+    
+    admin_user = User(
+        name="Admin User",
+        email="admin@tickmarks.com",
+        password_hash=hash_password("Admin@123"),
+        status=True,
+        email_verified=True
+    )
+    db.add(admin_user)
+    db.commit()
+    db.refresh(admin_user)
+    
+    user_role = UserRole(user_id=admin_user.id, role_id=admin_role.id)
+    db.add(user_role)
+    db.commit()
+    
+    print(f"User created: {admin_user}")
+    print(f"User roles: {admin_user.roles}")
+    
+    # Simulate login logic
+    email = "admin@tickmarks.com"
+    password = "Admin@123"
+    
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        print("User not found")
+    elif not verify_password(password, user.password_hash):
+        print("Password mismatch")
+    else:
+        print("Login logic start...")
+        access_token = create_access_token(data={"sub": str(user.id)})
+        print(f"Token created: {access_token[:20]}...")
+        profile = get_user_profile(user, db)
+        print(f"Profile built: {profile}")
+        
+except Exception as e:
+    import traceback
+    traceback.print_exc()
+finally:
+    db.close()
+
+
+
+
+
+--- FILE: \debug_login_live.py ---
+
+import sys
+import os
+# Add the current directory to sys.path to import app
+sys.path.append(os.getcwd())
+
+import dotenv
+dotenv.load_dotenv()
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from app.models.models import User, Role, UserRole
+from app.core.security import verify_password, create_access_token
+from app.api.auth import get_user_profile
+from app.core.config import settings
+
+# Setup database connection
+print(f"Connecting to: {settings.DATABASE_URL.split('@')[-1]}")
+engine = create_engine(settings.DATABASE_URL)
+SessionLocal = sessionmaker(bind=engine)
+
+db = SessionLocal()
+
+try:
+    # Simulate login logic
+    email = "admin@tickmarks.com"
+    password = "Admin@123"
+    
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        print("User not found")
+        # Check if any user exists
+        count = db.query(User).count()
+        print(f"Total users in DB: {count}")
+    elif not verify_password(password, user.password_hash):
+        print("Password mismatch")
+    else:
+        print("Login logic start...")
+        access_token = create_access_token(data={"sub": str(user.id)})
+        print(f"Token created: {access_token[:20]}...")
+        
+        print("Building profile...")
+        profile = get_user_profile(user, db)
+        print(f"Profile built successfully: {profile}")
+        
+except Exception as e:
+    import traceback
+    traceback.print_exc()
+finally:
+    db.close()
+
+
+
+
+
+--- FILE: \dump_schema.py ---
+
+from sqlalchemy import create_engine
+from sqlalchemy.schema import CreateTable
+from app.models.models import Base, User, Role, UserRole, Project, ProjectMember, TimeEntry
+
+# Use a postgresql URL to ensure Postgres syntax
+engine = create_engine('postgresql:///')
+
+with open('schema_dump.sql', 'w') as f:
+    for table_name, table in Base.metadata.tables.items():
+        create_stmt = str(CreateTable(table).compile(engine))
+        f.write(f"-- Table: {table_name}\n")
+        f.write(create_stmt + ";\n\n")
+
+print("Generated schema_dump.sql")
+
+
+--- FILE: \Procfile ---
+
+web: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+
+
+--- FILE: \requirements.txt ---
+
+fastapi==0.109.0
+uvicorn==0.27.0
+sqlalchemy==2.0.25
+psycopg2-binary==2.9.9
+pydantic==2.6.0
+pydantic-settings==2.1.0
+email-validator==2.1.0
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+python-dotenv==1.0.0
+aiosmtplib==3.0.1
+
+--- FILE: \runtime.txt ---
+
+python-3.11.8
+
+
+--- FILE: \runtime.txt.txt ---
+
+python-3.11.8
+
+
+--- FILE: \schema_dump.sql ---
+
+-- Table: users
+
+CREATE TABLE users (
+	id BIGSERIAL NOT NULL, 
+	name VARCHAR(255) NOT NULL, 
+	email VARCHAR(255) NOT NULL, 
+	password_hash VARCHAR(255) NOT NULL, 
+	status BOOLEAN NOT NULL, 
+	parent_id BIGINT, 
+	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
+	email_verified BOOLEAN NOT NULL, 
+	verification_token VARCHAR(255), 
+	password_reset_token VARCHAR(255), 
+	password_reset_token_expires TIMESTAMP WITHOUT TIME ZONE, 
+	PRIMARY KEY (id), 
+	FOREIGN KEY(parent_id) REFERENCES users (id)
+)
+
+;
+
+-- Table: roles
+
+CREATE TABLE roles (
+	id BIGSERIAL NOT NULL, 
+	name VARCHAR(50) NOT NULL, 
+	PRIMARY KEY (id), 
+	UNIQUE (name)
+)
+
+;
+
+-- Table: user_roles
+
+CREATE TABLE user_roles (
+	user_id BIGINT NOT NULL, 
+	role_id BIGINT NOT NULL, 
+	PRIMARY KEY (user_id, role_id), 
+	FOREIGN KEY(user_id) REFERENCES users (id), 
+	FOREIGN KEY(role_id) REFERENCES roles (id)
+)
+
+;
+
+-- Table: projects
+
+CREATE TABLE projects (
+	id BIGSERIAL NOT NULL, 
+	name VARCHAR(255) NOT NULL, 
+	client VARCHAR(255) NOT NULL, 
+	status BOOLEAN NOT NULL, 
+	manager_id BIGINT NOT NULL, 
+	reporting_area VARCHAR(255), 
+	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
+	PRIMARY KEY (id), 
+	FOREIGN KEY(manager_id) REFERENCES users (id)
+)
+
+;
+
+-- Table: project_members
+
+CREATE TABLE project_members (
+	project_id BIGINT NOT NULL, 
+	user_id BIGINT NOT NULL, 
+	bill_rate DECIMAL(10, 2), 
+	PRIMARY KEY (project_id, user_id), 
+	FOREIGN KEY(project_id) REFERENCES projects (id), 
+	FOREIGN KEY(user_id) REFERENCES users (id)
+)
+
+;
+
+-- Table: time_entries
+
+CREATE TABLE time_entries (
+	id BIGSERIAL NOT NULL, 
+	user_id BIGINT NOT NULL, 
+	project_id BIGINT NOT NULL, 
+	work_date DATE NOT NULL, 
+	hours DECIMAL(5, 2) NOT NULL, 
+	notes TEXT, 
+	status VARCHAR(20) NOT NULL, 
+	approved_by_id BIGINT, 
+	approval_date TIMESTAMP WITHOUT TIME ZONE, 
+	rejection_reason TEXT, 
+	created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL, 
+	resubmission_notes TEXT, 
+	PRIMARY KEY (id), 
+	CONSTRAINT uq_time_entries_user_project_date UNIQUE (user_id, project_id, work_date), 
+	CONSTRAINT check_hours_range CHECK (hours >= 0 AND hours <= 24), 
+	FOREIGN KEY(user_id) REFERENCES users (id), 
+	FOREIGN KEY(project_id) REFERENCES projects (id), 
+	FOREIGN KEY(approved_by_id) REFERENCES users (id)
+)
+
+;
+
+
+
+--- FILE: \test_login.py ---
+
+import requests
+import json
+
+url = "https://timetracker-api-m8k7.onrender.com/api/auth/login"
+payload = {
+    "email": "admin@tickmarks.com",
+    "password": "Admin@123"
+}
+headers = {
+    "Content-Type": "application/json",
+    "Accept": "application/json"
+}
+
+try:
+    response = requests.post(url, json=payload, headers=headers, timeout=30)
+    print(f"Status Code: {response.status_code}")
+    print(f"Response Headers: {dict(response.headers)}")
+    print(f"Response Body: {response.text}")
+    print(f"Request URL: {response.url}")
+except Exception as e:
+    print(f"Exception: {e}")
+
+
+
+
+
+--- FILE: \alembic\supabasetest.py ---
+
+from passlib.context import CryptContext
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+print(pwd_context.hash("Admin@123"))
+
+
+--- FILE: \alembic\versions\0001_initial_migration.py ---
+
+"""Initial migration
+
+Revision ID: 0001
+Revises: 
+Create Date: 2024-01-15
+
+"""
+from alembic import op
+import sqlalchemy as sa
+
+revision = '0001'
+down_revision = None
+branch_labels = None
+depends_on = None
+
+def upgrade() -> None:
+    # Create users table
+    op.create_table('users',
+        sa.Column('id', sa.BigInteger(), nullable=False),
+        sa.Column('name', sa.String(255), nullable=False),
+        sa.Column('email', sa.String(255), nullable=False),
+        sa.Column('password_hash', sa.String(255), nullable=False),
+        sa.Column('status', sa.Boolean(), nullable=False, server_default='1'),
+        sa.Column('parent_id', sa.BigInteger(), nullable=True),
+        sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
+        sa.Column('email_verified', sa.Boolean(), nullable=False, server_default='0'),
+        sa.Column('verification_token', sa.String(255), nullable=True),
+        sa.PrimaryKeyConstraint('id'),
+        sa.ForeignKeyConstraint(['parent_id'], ['users.id'], ondelete='SET NULL'),
+        # This creates the unique index automatically with the name 'ix_users_email'
+        sa.UniqueConstraint('email', name='ix_users_email')
+    )
+    # REMOVED: redundant op.create_index calls that caused the DuplicateTable error
+
+    # Create roles table
+    op.create_table('roles',
+        sa.Column('id', sa.BigInteger(), nullable=False),
+        sa.Column('name', sa.String(50), nullable=False),
+        sa.PrimaryKeyConstraint('id'),
+        sa.UniqueConstraint('name', name='uq_roles_name')
+    )
+
+    # Create user_roles table
+    op.create_table('user_roles',
+        sa.Column('user_id', sa.BigInteger(), nullable=False),
+        sa.Column('role_id', sa.BigInteger(), nullable=False),
+        sa.PrimaryKeyConstraint('user_id', 'role_id'),
+        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+        sa.ForeignKeyConstraint(['role_id'], ['roles.id'], ondelete='CASCADE')
+    )
+
+    # Create projects table
+    op.create_table('projects',
+        sa.Column('id', sa.BigInteger(), nullable=False),
+        sa.Column('name', sa.String(255), nullable=False),
+        sa.Column('client', sa.String(255), nullable=False),
+        sa.Column('status', sa.Boolean(), nullable=False, server_default='1'),
+        sa.Column('manager_id', sa.BigInteger(), nullable=False),
+        sa.Column('reporting_area', sa.String(255), nullable=True),
+        sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
+        sa.PrimaryKeyConstraint('id'),
+        sa.ForeignKeyConstraint(['manager_id'], ['users.id'], ondelete='RESTRICT')
+    )
+
+    # Create project_members table
+    op.create_table('project_members',
+        sa.Column('project_id', sa.BigInteger(), nullable=False),
+        sa.Column('user_id', sa.BigInteger(), nullable=False),
+        sa.Column('bill_rate', sa.DECIMAL(10, 2), nullable=True),
+        sa.PrimaryKeyConstraint('project_id', 'user_id'),
+        sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ondelete='CASCADE'),
+        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE')
+    )
+
+    # Create time_entries table
+    op.create_table('time_entries',
+        sa.Column('id', sa.BigInteger(), nullable=False),
+        sa.Column('user_id', sa.BigInteger(), nullable=False),
+        sa.Column('project_id', sa.BigInteger(), nullable=False),
+        sa.Column('work_date', sa.Date(), nullable=False),
+        sa.Column('hours', sa.DECIMAL(5, 2), nullable=False),
+        sa.Column('notes', sa.Text(), nullable=True),
+        sa.Column('status', sa.String(20), nullable=False, server_default='PENDING'),
+        sa.Column('approved_by_id', sa.BigInteger(), nullable=True),
+        sa.Column('approval_date', sa.DateTime(), nullable=True),
+        sa.Column('rejection_reason', sa.Text(), nullable=True),
+        sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
+        sa.Column('resubmission_notes', sa.Text(), nullable=True),
+        sa.PrimaryKeyConstraint('id'),
+        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
+        sa.ForeignKeyConstraint(['project_id'], ['projects.id'], ondelete='CASCADE'),
+        sa.ForeignKeyConstraint(['approved_by_id'], ['users.id'], ondelete='SET NULL'),
+        sa.UniqueConstraint('user_id', 'project_id', 'work_date', name='uq_time_entries_user_project_date'),
+        sa.CheckConstraint('hours >= 0 AND hours <= 24', name='check_hours_range')
+    )
+
+def downgrade() -> None:
+    op.drop_table('time_entries')
+    op.drop_table('project_members')
+    op.drop_table('projects')
+    op.drop_table('user_roles')
+    op.drop_table('roles')
+    op.drop_table('users')
+
+
+
+
+
+--- FILE: \alembic\versions\0002_add_password_reset_fields.py ---
+
+"""Add password reset fields to users table
+
+Revision ID: 0002
+Revises: 0001
+Create Date: 2026-03-16
+
+"""
+from alembic import op
+import sqlalchemy as sa
+
+revision = '0002'
+down_revision = '0001'
+branch_labels = None
+depends_on = None
+
+def upgrade() -> None:
+    # Add password_reset_token column
+    op.add_column('users',
+        sa.Column('password_reset_token', sa.String(255), nullable=True)
+    )
+    
+    # Add password_reset_token_expires column
+    op.add_column('users',
+        sa.Column('password_reset_token_expires', sa.DateTime(), nullable=True)
+    )
+
+def downgrade() -> None:
+    # Remove the columns
+    op.drop_column('users', 'password_reset_token_expires')
+    op.drop_column('users', 'password_reset_token')
+
+
+--- FILE: \app\main.py ---
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from app.api import auth, users, projects, time_entries, reports
+from app.core.database import engine, Base
+
+app = FastAPI(title="TimeTracker API")
+
+# CORS configuration - specific origins to prevent browser blocking
+origins = [
+    "https://timesheetick.vercel.app",
+    "https://ticksheet-app.netlify.app",
+    "http://localhost:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:8000",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=600,
+)
+
+# Custom handler to force 422 errors into your specific format
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=422,
+        content={
+            "status": "error",
+            "statusCode": 422,
+            "message": "Validation Error",
+            "data": None,
+            "errors": exc.errors()
+        },
+    )
+
+app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
+app.include_router(users.router, prefix="/api/users", tags=["Users"])
+app.include_router(projects.router, prefix="/api/projects", tags=["Projects"])
+app.include_router(time_entries.router, prefix="/api/time-entries", tags=["Time Entries"])
+app.include_router(reports.router, prefix="/api/reports", tags=["Reports"])
+
+@app.on_event("startup")
+async def startup_event():
+    """Initialize database on startup (non-blocking)"""
+    try:
+        if engine:
+            # Create all tables defined in models
+            Base.metadata.create_all(bind=engine)
+            print("? Database tables initialized")
+            
+            # Ensure critical columns exist (for migrations)
+            from sqlalchemy import text, inspect
+            
+            with engine.begin() as connection:
+                # Check if columns exist before adding them
+                inspector = inspect(engine)
+                columns = [col['name'] for col in inspector.get_columns('users')]
+                
+                if 'password_reset_token' not in columns:
+                    try:
+                        connection.execute(text(
+                            "ALTER TABLE users ADD COLUMN password_reset_token VARCHAR(255)"
+                        ))
+                        print("? Added password_reset_token column")
+                    except Exception as e:
+                        print(f"? password_reset_token column: {str(e)}")
+                
+                if 'password_reset_token_expires' not in columns:
+                    try:
+                        connection.execute(text(
+                            "ALTER TABLE users ADD COLUMN password_reset_token_expires TIMESTAMP"
+                        ))
+                        print("? Added password_reset_token_expires column")
+                    except Exception as e:
+                        print(f"? password_reset_token_expires column: {str(e)}")
+        else:
+            print("? Skipping database initialization - engine not available")
+    except Exception as e:
+        print(f"? Database initialization error during startup: {str(e)}")
+        # Don't crash the app, just log the error
+        import traceback
+        traceback.print_exc()
+
+@app.get("/")
+def read_root():
+    return {"status": "online", "message": "TimeTracker API"}
+
+# Health check endpoint
+@app.get("/health")
+def health_check():
+    from app.core.database import engine
+    db_status = "healthy" if engine else "not_configured"
+    return {
+        "status": "healthy",
+        "message": "API is running",
+        "database": db_status
+    }
+
+
+
+--- FILE: \app\__init__.py ---
+
+
+
+
+
+
+
+--- FILE: \app\api\auth.py ---
+
+from datetime import datetime, timedelta
+from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy.orm import Session
+from app.core.database import get_db
+from app.core.security import hash_password, verify_password, create_access_token, decode_access_token
+from app.core.config import settings
+from app.models.models import User, Role, UserRole
+from app.schemas.schemas import (
+    LoginRequest, RegisterRequest, LoginResponse, UserProfileResponse, 
+    TokenResponse, APIResponse
+)
+from app.services.email_service import email_service
+import secrets
+
+router = APIRouter()
+security = HTTPBearer()
+
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+) -> User:
+    token = credentials.credentials
+    payload = decode_access_token(token)
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token"
+        )
+    
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token payload"
+        )
+    
+    user = db.query(User).filter(User.id == int(user_id)).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found"
+        )
+    
+    return user
+
+
+def get_user_profile(user: User, db: Session) -> dict:
+    """Build user profile response with roles."""
+    manager_name = None
+    if user.parent_id:
+        manager = db.query(User).filter(User.id == user.parent_id).first()
+        if manager:
+            manager_name = manager.name
+    
+    roles = []
+    for role in user.roles:
+        roles.append({"id": str(role.id), "value": role.name})
+    
+    return {
+        "id": user.id,
+        "name": user.name,
+        "email": user.email,
+        "status": user.status,
+        "parent_id": user.parent_id,
+        "manager_name": manager_name,
+        "created_at": user.created_at,
+        "roles": roles
+    }
+
+
+@router.post("/login", response_model=LoginResponse)
+async def login(request: LoginRequest, db: Session = Depends(get_db)):
+    try:
+        user = db.query(User).filter(User.email == request.email).first()
+        
+        if not user or not verify_password(request.password, user.password_hash):
+            return LoginResponse(
+                status="error",
+                statusCode=401,
+                message="Invalid email or password",
+                data=None,
+                errors=["Invalid email or password"]
+            )
+        
+        if not user.status:
+            return LoginResponse(
+                status="error",
+                statusCode=403,
+                message="Account is deactivated",
+                data=None,
+                errors=["Account is deactivated"]
+            )
+        
+        if not user.email_verified:
+            return LoginResponse(
+                status="error",
+                statusCode=403,
+                message="Please verify your email address",
+                data=None,
+                errors=["Email not verified"]
+            )
+        
+        access_token = create_access_token(data={"sub": str(user.id)})
+        profile = get_user_profile(user, db)
+        
+        return LoginResponse(
+            status="success",
+            statusCode=200,
+            message="Login successful",
+            data=TokenResponse(token=access_token, profile=UserProfileResponse(**profile)),
+            errors=[]
+        )
+    except Exception as e:
+        import traceback
+        print(f"Login error: {str(e)}")
+        traceback.print_exc()
+        return LoginResponse(
+            status="error",
+            statusCode=500,
+            message=f"Server error: {str(e)}",
+            data=None,
+            errors=[str(e)]
+        )
+
+
+@router.post("/register", response_model=LoginResponse)
+async def register(request: RegisterRequest, db: Session = Depends(get_db)):
+    # Check if email exists
+    existing_user = db.query(User).filter(User.email == request.email).first()
+    if existing_user:
+        return LoginResponse(
+            status="error",
+            statusCode=400,
+            message="Email already registered",
+            data=None,
+            errors=["Email already registered"]
+        )
+    
+    # Create user with fixed indentation
+    user = User(
+        name=request.name,
+        email=request.email,
+        password_hash=hash_password(request.password),
+        status=True,
+        email_verified=False,  # SOC2 Compliance: must click email link
+        verification_token=secrets.token_urlsafe(32)
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    
+    # Assign roles
+    if request.roles:
+        for role_name in request.roles:
+            role = db.query(Role).filter(Role.name == role_name).first()
+            if role:
+                user_role = UserRole(user_id=user.id, role_id=role.id)
+                db.add(user_role)
+    else:
+        # Default role is Member
+        member_role = db.query(Role).filter(Role.name == "Member").first()
+        if member_role:
+            user_role = UserRole(user_id=user.id, role_id=member_role.id)
+            db.add(user_role)
+    
+    db.commit()
+    
+    # Send verification email
+    try:
+        await email_service.send_verification_email(
+            email=user.email,
+            name=user.name,
+            token=user.verification_token
+        )
+    except Exception as e:
+        # Log error but don't crash registration; user can resend later
+        print(f"Email error: {str(e)}")
+    
+    return LoginResponse(
+        status="success",
+        statusCode=201,
+        message="Registration successful. Please check your email to verify your account.",
+        data=None,
+        errors=[]
+    )
+
+
+@router.get("/verify-email")
+async def verify_email(token: str, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.verification_token == token).first()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid verification token"
+        )
+    
+    user.email_verified = True
+    user.verification_token = None
+    db.commit()
+    
+    return {"message": "Email verified successfully"}
+
+
+@router.post("/resend-verification")
+async def resend_verification(email: str, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == email).first()
+    
+    if not user:
+        # Standard security practice: don't reveal if email exists
+        return {"message": "If the email exists, a verification link has been sent."}
+    
+    if user.email_verified:
+        return {"message": "Email is already verified."}
+    
+    user.verification_token = secrets.token_urlsafe(32)
+    db.commit()
+    
+    await email_service.send_verification_email(
+        email=user.email,
+        name=user.name,
+        token=user.verification_token
+    )
+    
+    return {"message": "Verification email sent."}
+
+
+@router.post("/request-password-reset")
+async def request_password_reset(request: dict, db: Session = Depends(get_db)):
+    email = request.get('email')
+    user = db.query(User).filter(User.email == email).first()
+    
+    if not user:
+        # Standard security practice: don't reveal if email exists
+        return {
+            "status": "success",
+            "message": "If the email exists, a password reset link has been sent."
+        }
+    
+    # Generate a password reset token (valid for 24 hours)
+    reset_token = secrets.token_urlsafe(32)
+    user.password_reset_token = reset_token
+    user.password_reset_token_expires = datetime.utcnow() + timedelta(hours=24)
+    db.commit()
+    
+    # Send password reset email
+    try:
+        await email_service.send_password_reset_email(
+            email=user.email,
+            name=user.name,
+            token=reset_token
+        )
+    except Exception as e:
+        print(f"Failed to send password reset email: {str(e)}")
+    
+    return {
+        "status": "success",
+        "message": "If the email exists, a password reset link has been sent."
+    }
+
+
+@router.post("/reset-password")
+async def reset_password(request: dict, db: Session = Depends(get_db)):
+    token = request.get('token')
+    new_password = request.get('new_password')
+    
+    if not token or not new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token and new password are required"
+        )
+    
+    user = db.query(User).filter(
+        User.password_reset_token == token,
+        User.password_reset_token_expires > datetime.utcnow()
+    ).first()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token"
+        )
+    
+    # Update password
+    user.password_hash = hash_password(new_password)
+    user.password_reset_token = None
+    user.password_reset_token_expires = None
+    db.commit()
+    
+    # Send confirmation email
+    try:
+        await email_service.send_password_changed_email(
+            email=user.email,
+            name=user.name
+        )
+    except Exception as e:
+        print(f"Failed to send password changed email: {str(e)}")
+    
+    return {
+        "status": "success",
+        "message": "Password has been reset successfully"
+    }
+
+
+
+
+
+
+
+
+
+
+--- FILE: \app\api\projects.py ---
+
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy.orm import Session
+from app.core.database import get_db
+from app.api.auth import get_current_user
+from app.models.models import User, Role, Project, ProjectMember, TimeEntry
+from app.schemas.schemas import ProjectCreate, ProjectUpdate, ProjectMemberAdd
+
+router = APIRouter()
+def check_admin(user: User) -> bool:
+    return any(role.name == "Admin" for role in user.roles)
+
+
+def check_manager(user: User) -> bool:
+    return any(role.name == "Manager" for role in user.roles)
+
+
+def check_admin_or_manager(user: User) -> bool:
+    return any(role.name in ["Admin", "Manager"] for role in user.roles)
+
+
+def build_project_response(project: Project, db: Session) -> dict:
+    manager_name = None
+    if project.manager_id:
+        manager = db.query(User).filter(User.id == project.manager_id).first()
+        if manager:
+            manager_name = manager.name
+    
+    return {
+        "id": project.id,
+        "name": project.name,
+        "client": project.client,
+        "status": project.status,
+        "manager_id": project.manager_id,
+        "manager_name": manager_name,
+        "reporting_area": project.reporting_area,
+        "created_at": project.created_at.isoformat()
+    }
+
+
+@router.get("")
+async def list_projects(
+    page: int = Query(1, ge=1),
+    size: int = Query(100, ge=1, le=100),
+    status_filter: Optional[bool] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    query = db.query(Project)
+    
+    # Non-admin users can only see projects they're assigned to
+    if not check_admin(current_user):
+        query = query.join(ProjectMember).filter(
+            ProjectMember.user_id == current_user.id
+        )
+    
+    if status_filter is not None:
+        query = query.filter(Project.status == status_filter)
+    
+    total = query.count()
+    projects = query.offset((page - 1) * size).limit(size).all()
+    
+    return {
+        "status": "success",
+        "statusCode": 200,
+        "message": "Projects retrieved successfully",
+        "data": {
+            "projects": [build_project_response(p, db) for p in projects],
+            "total": total,
+            "page": page,
+            "size": size
+        },
+        "errors": []
+    }
+
+
+@router.post("")
+async def create_project(
+    request: ProjectCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if not check_admin(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    
+    project = Project(
+        name=request.name,
+        client=request.client,
+        manager_id=request.manager_id,
+        reporting_area=request.reporting_area
+    )
+    db.add(project)
+    db.commit()
+    db.refresh(project)
+    
+    # Add manager as project member
+    member = ProjectMember(
+        project_id=project.id,
+        user_id=request.manager_id
+    )
+    db.add(member)
+    db.commit()
+    
+    return {
+        "status": "success",
+        "statusCode": 201,
+        "message": "Project created successfully",
+        "data": build_project_response(project, db),
+        "errors": []
+    }
+
+
+@router.get("/{project_id}")
+async def get_project(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
+    
+    # Check access
+    if not check_admin(current_user):
+        member = db.query(ProjectMember).filter(
+            ProjectMember.project_id == project_id,
+            ProjectMember.user_id == current_user.id
+        ).first()
+        if not member:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied"
+            )
+    
+    return {
+        "status": "success",
+        "statusCode": 200,
+        "message": "Project retrieved successfully",
+        "data": build_project_response(project, db),
+        "errors": []
+    }
+
+
+@router.put("/{project_id}")
+async def update_project(
+    project_id: int,
+    request: ProjectUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if not check_admin(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
+    
+    if request.name is not None:
+        project.name = request.name
+    if request.client is not None:
+        project.client = request.client
+    if request.status is not None:
+        project.status = request.status
+    if request.manager_id is not None:
+        project.manager_id = request.manager_id
+    if request.reporting_area is not None:
+        project.reporting_area = request.reporting_area
+    
+    db.commit()
+    db.refresh(project)
+    
+    return {
+        "status": "success",
+        "statusCode": 200,
+        "message": "Project updated successfully",
+        "data": build_project_response(project, db),
+        "errors": []
+    }
+
+
+@router.delete("/{project_id}")
+async def delete_project(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if not check_admin(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
+    
+    project.status = False
+    db.commit()
+    
+    return {
+        "status": "success",
+        "statusCode": 200,
+        "message": "Project deactivated successfully",
+        "data": None,
+        "errors": []
+    }
+
+
+@router.get("/{project_id}/members")
+async def list_project_members(
+    project_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
+    
+    # Check access
+    if not check_admin(current_user):
+        member = db.query(ProjectMember).filter(
+            ProjectMember.project_id == project_id,
+            ProjectMember.user_id == current_user.id
+        ).first()
+        if not member:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied"
+            )
+    
+    members = db.query(ProjectMember).filter(
+        ProjectMember.project_id == project_id
+    ).all()
+    
+    result = []
+    for m in members:
+        user = db.query(User).filter(User.id == m.user_id).first()
+        if user:
+            result.append({
+                "user_id": user.id,
+                "user_name": user.name,
+                "user_email": user.email,
+                "bill_rate": float(m.bill_rate) if m.bill_rate else None
+            })
+    
+    return {
+        "status": "success",
+        "statusCode": 200,
+        "message": "Project members retrieved successfully",
+        "data": result,
+        "errors": []
+    }
+
+
+@router.post("/{project_id}/members")
+async def add_project_member(
+    project_id: int,
+    request: ProjectMemberAdd,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
+    
+    # Admin or project manager can add members
+    if not check_admin(current_user) and project.manager_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admin or project manager can add members"
+        )
+    
+    # Check if already a member
+    existing = db.query(ProjectMember).filter(
+        ProjectMember.project_id == project_id,
+        ProjectMember.user_id == request.user_id
+    ).first()
+    
+    if existing:
+        return {
+            "status": "error",
+            "statusCode": 400,
+            "message": "User is already a member of this project",
+            "data": None,
+            "errors": ["User is already a member"]
+        }
+    
+    member = ProjectMember(
+        project_id=project_id,
+        user_id=request.user_id,
+        bill_rate=request.bill_rate
+    )
+    db.add(member)
+    db.commit()
+    
+    return {
+        "status": "success",
+        "statusCode": 201,
+        "message": "Member added successfully",
+        "data": {"user_id": request.user_id, "project_id": project_id},
+        "errors": []
+    }
+
+
+@router.delete("/{project_id}/members/{user_id}")
+async def remove_project_member(
+    project_id: int,
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
+    
+    if not check_admin(current_user) and project.manager_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admin or project manager can remove members"
+        )
+    
+    member = db.query(ProjectMember).filter(
+        ProjectMember.project_id == project_id,
+        ProjectMember.user_id == user_id
+    ).first()
+    
+    if not member:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Member not found"
+        )
+    
+    db.delete(member)
+    db.commit()
+    
+    return {
+        "status": "success",
+        "statusCode": 200,
+        "message": "Member removed successfully",
+        "data": None,
+        "errors": []
+    }
+
+
+
+
+
+
+
+
+--- FILE: \app\api\reports.py ---
+
+from datetime import date, datetime, timedelta
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+from sqlalchemy import func
+from app.core.database import get_db
+from app.api.auth import get_current_user
+from app.models.models import User, Project, ProjectMember, TimeEntry
+from decimal import Decimal
+
+router = APIRouter()
+def check_admin(user: User) -> bool:
+    return any(role.name == "Admin" for role in user.roles)
+
+
+def check_manager(user: User) -> bool:
+    return any(role.name == "Manager" for role in user.roles)
+
+
+@router.get("/summary")
+async def get_report_summary(
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    project_id: Optional[int] = None,
+    user_id: Optional[int] = None,
+    reporting_area: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Generate time entry summary report."""
+    
+    # Default to current month if no dates provided
+    if not start_date:
+        start_date = date.today().replace(day=1)
+    if not end_date:
+        end_date = date.today()
+    
+    query = db.query(TimeEntry).filter(
+        TimeEntry.work_date >= start_date,
+        TimeEntry.work_date <= end_date,
+        TimeEntry.status == "APPROVED"
+    )
+    
+    # Handle access control
+    is_admin = check_admin(current_user)
+    is_manager = check_manager(current_user)
+    
+    if is_admin:
+        # Admin can see all entries
+        pass
+    elif is_manager:
+        # Manager can see entries of their team members
+        team_member_ids = db.query(User.id).filter(User.parent_id == current_user.id).all()
+        team_member_ids = [m[0] for m in team_member_ids]
+        if team_member_ids:
+            query = query.filter(TimeEntry.user_id.in_(team_member_ids))
+        else:
+            # If no team members, show nothing
+            query = query.filter(TimeEntry.user_id == -1)
+    else:
+        # Regular users see only their own entries
+        query = query.filter(TimeEntry.user_id == current_user.id)
+    
+    if project_id:
+        query = query.filter(TimeEntry.project_id == project_id)
+    if user_id and is_admin:
+        query = query.filter(TimeEntry.user_id == user_id)
+    
+    entries = query.all()
+    
+    # Group by project
+    project_summary = {}
+    for entry in entries:
+        if entry.project_id not in project_summary:
+            project = db.query(Project).filter(Project.id == entry.project_id).first()
+            project_summary[entry.project_id] = {
+                "project_id": entry.project_id,
+                "project_name": project.name if project else "Unknown",
+                "client": project.client if project else "Unknown",
+                "reporting_area": project.reporting_area if project else None,
+                "total_hours": Decimal(0),
+                "user_hours": {}
+            }
+        
+        project_summary[entry.project_id]["total_hours"] += entry.hours
+        
+        if entry.user_id not in project_summary[entry.project_id]["user_hours"]:
+            user = db.query(User).filter(User.id == entry.user_id).first()
+            project_summary[entry.project_id]["user_hours"][entry.user_id] = {
+                "user_id": entry.user_id,
+                "user_name": user.name if user else "Unknown",
+                "hours": Decimal(0)
+            }
+        
+        project_summary[entry.project_id]["user_hours"][entry.user_id]["hours"] += entry.hours
+    
+    # Convert user_hours to list
+    result = []
+    for pid, pdata in project_summary.items():
+        if reporting_area and pdata["reporting_area"] != reporting_area:
+            continue
+        result.append({
+            **pdata,
+            "user_hours": list(pdata["user_hours"].values())
+        })
+    
+    # Calculate totals
+    total_hours = sum(float(p["total_hours"]) for p in result)
+    
+    return {
+        "status": "success",
+        "statusCode": 200,
+        "message": "Report generated successfully",
+        "data": {
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "total_hours": total_hours,
+            "total_projects": len(result),
+            "project_summary": result
+        },
+        "errors": []
+    }
+
+
+@router.get("/daily")
+async def get_daily_report(
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get daily time entry breakdown."""
+    
+    if not start_date:
+        start_date = date.today() - timedelta(days=7)
+    if not end_date:
+        end_date = date.today()
+    
+    query = db.query(TimeEntry).filter(
+        TimeEntry.work_date >= start_date,
+        TimeEntry.work_date <= end_date
+    )
+    
+    # Handle access control
+    is_admin = check_admin(current_user)
+    is_manager = check_manager(current_user)
+    
+    if is_admin:
+        # Admin can see all entries
+        pass
+    elif is_manager:
+        # Manager can see entries of their team members
+        team_member_ids = db.query(User.id).filter(User.parent_id == current_user.id).all()
+        team_member_ids = [m[0] for m in team_member_ids]
+        if team_member_ids:
+            query = query.filter(TimeEntry.user_id.in_(team_member_ids))
+        else:
+            # If no team members, show nothing
+            query = query.filter(TimeEntry.user_id == -1)
+    else:
+        # Regular users see only their own entries
+        query = query.filter(TimeEntry.user_id == current_user.id)
+    
+    entries = query.order_by(TimeEntry.work_date).all()
+    
+    # Group by date
+    daily_summary = {}
+    for entry in entries:
+        date_str = entry.work_date.isoformat()
+        if date_str not in daily_summary:
+            daily_summary[date_str] = {
+                "date": date_str,
+                "total_hours": Decimal(0),
+                "entries": []
+            }
+        
+        daily_summary[date_str]["total_hours"] += entry.hours
+        
+        user = db.query(User).filter(User.id == entry.user_id).first()
+        project = db.query(Project).filter(Project.id == entry.project_id).first()
+        
+        daily_summary[date_str]["entries"].append({
+            "id": entry.id,
+            "user_name": user.name if user else "Unknown",
+            "project_name": project.name if project else "Unknown",
+            "hours": float(entry.hours),
+            "status": entry.status,
+            "notes": entry.notes
+        })
+    
+    return {
+        "status": "success",
+        "statusCode": 200,
+        "message": "Daily report generated successfully",
+        "data": {
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "daily_summary": list(daily_summary.values())
+        },
+        "errors": []
+    }
+    
+    # Group by date
+    daily_summary = {}
+    for entry in entries:
+        date_str = entry.work_date.isoformat()
+        if date_str not in daily_summary:
+            daily_summary[date_str] = {
+                "date": date_str,
+                "total_hours": Decimal(0),
+                "entries": []
+            }
+        
+        daily_summary[date_str]["total_hours"] += entry.hours
+        
+        user = db.query(User).filter(User.id == entry.user_id).first()
+        project = db.query(Project).filter(Project.id == entry.project_id).first()
+        
+        daily_summary[date_str]["entries"].append({
+            "id": entry.id,
+            "user_name": user.name if user else "Unknown",
+            "project_name": project.name if project else "Unknown",
+            "hours": float(entry.hours),
+            "status": entry.status,
+            "notes": entry.notes
+        })
+    
+    return {
+        "status": "success",
+        "statusCode": 200,
+        "message": "Daily report generated successfully",
+        "data": {
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "daily_summary": list(daily_summary.values())
+        },
+        "errors": []
+    }
+
+
+@router.get("/by-reporting-area")
+async def get_report_by_area(
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get time entries grouped by reporting area."""
+    
+    if not start_date:
+        start_date = date.today().replace(day=1)
+    if not end_date:
+        end_date = date.today()
+    
+    # Get all projects with their reporting areas
+    projects = db.query(Project).all()
+    project_areas = {p.id: p.reporting_area for p in projects}
+    
+    query = db.query(TimeEntry).filter(
+        TimeEntry.work_date >= start_date,
+        TimeEntry.work_date <= end_date,
+        TimeEntry.status == "APPROVED"
+    )
+    
+    # Handle access control
+    is_admin = check_admin(current_user)
+    is_manager = check_manager(current_user)
+    
+    if is_admin:
+        # Admin can see all entries
+        pass
+    elif is_manager:
+        # Manager can see entries of their team members
+        team_member_ids = db.query(User.id).filter(User.parent_id == current_user.id).all()
+        team_member_ids = [m[0] for m in team_member_ids]
+        if team_member_ids:
+            query = query.filter(TimeEntry.user_id.in_(team_member_ids))
+        else:
+            # If no team members, show nothing
+            query = query.filter(TimeEntry.user_id == -1)
+    else:
+        # Regular users see only their own entries
+        query = query.filter(TimeEntry.user_id == current_user.id)
+    
+    entries = query.all()
+    
+    # Group by reporting area
+    area_summary = {}
+    for entry in entries:
+        area = project_areas.get(entry.project_id, "Other")
+        if area is None:
+            area = "Other"
+        
+        if area not in area_summary:
+            area_summary[area] = {
+                "reporting_area": area,
+                "total_hours": Decimal(0),
+                "projects": {}
+            }
+        
+        area_summary[area]["total_hours"] += entry.hours
+        
+        if entry.project_id not in area_summary[area]["projects"]:
+            project = db.query(Project).filter(Project.id == entry.project_id).first()
+            area_summary[area]["projects"][entry.project_id] = {
+                "project_id": entry.project_id,
+                "project_name": project.name if project else "Unknown",
+                "hours": Decimal(0)
+            }
+        
+        area_summary[area]["projects"][entry.project_id]["hours"] += entry.hours
+    
+    # Convert projects to list
+    result = []
+    for area, data in area_summary.items():
+        result.append({
+            **data,
+            "projects": list(data["projects"].values())
+        })
+    
+    return {
+        "status": "success",
+        "statusCode": 200,
+        "message": "Report by area generated successfully",
+        "data": result,
+        "errors": []
+    }
+
+
+@router.get("/user/{user_id}")
+async def get_user_report(
+    user_id: int,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get detailed report for a specific user."""
+    
+    # Users can only see their own reports unless admin
+    if user_id != current_user.id and not check_admin(current_user):
+        raise HTTPException(
+            status_code=403,
+            detail="Access denied"
+        )
+    
+    if not start_date:
+        start_date = date.today().replace(day=1)
+    if not end_date:
+        end_date = date.today()
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+    
+    entries = db.query(TimeEntry).filter(
+        TimeEntry.user_id == user_id,
+        TimeEntry.work_date >= start_date,
+        TimeEntry.work_date <= end_date
+    ).all()
+    
+    total_hours = sum(float(e.hours) for e in entries)
+    approved_hours = sum(float(e.hours) for e in entries if e.status == "APPROVED")
+    pending_hours = sum(float(e.hours) for e in entries if e.status == "PENDING")
+    rejected_hours = sum(float(e.hours) for e in entries if e.status == "REJECTED")
+    
+    # Group by project
+    project_hours = {}
+    for entry in entries:
+        if entry.project_id not in project_hours:
+            project = db.query(Project).filter(Project.id == entry.project_id).first()
+            project_hours[entry.project_id] = {
+                "project_id": entry.project_id,
+                "project_name": project.name if project else "Unknown",
+                "client": project.client if project else "Unknown",
+                "hours": Decimal(0)
+            }
+        project_hours[entry.project_id]["hours"] += entry.hours
+    
+    return {
+        "status": "success",
+        "statusCode": 200,
+        "message": "User report generated successfully",
+        "data": {
+            "user": {
+                "id": user.id,
+                "name": user.name,
+                "email": user.email
+            },
+            "start_date": start_date.isoformat(),
+            "end_date": end_date.isoformat(),
+            "total_hours": total_hours,
+            "approved_hours": approved_hours,
+            "pending_hours": pending_hours,
+            "rejected_hours": rejected_hours,
+            "project_breakdown": list(project_hours.values())
+        },
+        "errors": []
+    }
+
+
+
+
+
+
+
+
+--- FILE: \app\api\time_entries.py ---
+
+from datetime import date, datetime
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy.orm import Session
+from app.core.database import get_db
+from app.api.auth import get_current_user
+from app.models.models import User, Project, ProjectMember, TimeEntry
+from app.schemas.schemas import (
+    TimeEntryCreate, TimeEntryUpdate, TimeEntryApproval, TimeEntryResubmit
+)
+from app.services.email_service import email_service
+
+router = APIRouter()
+def check_admin(user: User) -> bool:
+    return any(role.name == "Admin" for role in user.roles)
+
+
+def check_manager(user: User) -> bool:
+    return any(role.name == "Manager" for role in user.roles)
+
+
+def build_entry_response(entry: TimeEntry, db: Session) -> dict:
+    user = db.query(User).filter(User.id == entry.user_id).first()
+    project = db.query(Project).filter(Project.id == entry.project_id).first()
+    approver = None
+    if entry.approved_by_id:
+        approver = db.query(User).filter(User.id == entry.approved_by_id).first()
+    
+    return {
+        "id": entry.id,
+        "user_id": entry.user_id,
+        "user_name": user.name if user else "Unknown",
+        "project_id": entry.project_id,
+        "project_name": project.name if project else "Unknown",
+        "work_date": entry.work_date.isoformat(),
+        "hours": float(entry.hours),
+        "notes": entry.notes,
+        "status": entry.status,
+        "approved_by_id": entry.approved_by_id,
+        "approved_by_name": approver.name if approver else None,
+        "approval_date": entry.approval_date.isoformat() if entry.approval_date else None,
+        "rejection_reason": entry.rejection_reason,
+        "resubmission_notes": entry.resubmission_notes,
+        "created_at": entry.created_at.isoformat()
+    }
+
+
+@router.get("")
+async def list_time_entries(
+    page: int = Query(1, ge=1),
+    size: int = Query(100, ge=1, le=100),
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
+    project_id: Optional[int] = None,
+    status_filter: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    query = db.query(TimeEntry)
+    
+    # Non-admin users can only see their own entries (or managers can see their team)
+    if not check_admin(current_user):
+        if check_manager(current_user):
+            # Managers can see entries of their team members
+            team_member_ids = db.query(User.id).filter(User.parent_id == current_user.id).all()
+            team_member_ids = [m[0] for m in team_member_ids]
+            if team_member_ids:
+                query = query.filter(TimeEntry.user_id.in_(team_member_ids))
+            else:
+                # If no team members, show nothing
+                query = query.filter(TimeEntry.user_id == -1)
+        else:
+            # Regular employees see only their own
+            query = query.filter(TimeEntry.user_id == current_user.id)
+    
+    if start_date:
+        query = query.filter(TimeEntry.work_date >= start_date)
+    if end_date:
+        query = query.filter(TimeEntry.work_date <= end_date)
+    if project_id:
+        query = query.filter(TimeEntry.project_id == project_id)
+    if status_filter:
+        query = query.filter(TimeEntry.status == status_filter)
+    
+    total = query.count()
+    entries = query.order_by(TimeEntry.work_date.desc()).offset(
+        (page - 1) * size
+    ).limit(size).all()
+    
+    return {
+        "status": "success",
+        "statusCode": 200,
+        "message": "Time entries retrieved successfully",
+        "data": {
+            "entries": [build_entry_response(e, db) for e in entries],
+            "total": total,
+            "page": page,
+            "size": size
+        },
+        "errors": []
+    }
+
+
+@router.post("")
+async def create_time_entry(
+    request: TimeEntryCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    # Check if user is member of the project
+    member = db.query(ProjectMember).filter(
+        ProjectMember.project_id == request.project_id,
+        ProjectMember.user_id == current_user.id
+    ).first()
+    
+    if not member and not check_admin(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You are not assigned to this project"
+        )
+    
+    # Check for duplicate entry
+    existing = db.query(TimeEntry).filter(
+        TimeEntry.user_id == current_user.id,
+        TimeEntry.project_id == request.project_id,
+        TimeEntry.work_date == request.work_date
+    ).first()
+    
+    if existing:
+        return {
+            "status": "error",
+            "statusCode": 400,
+            "message": "Time entry already exists for this date and project",
+            "data": None,
+            "errors": ["Duplicate entry"]
+        }
+    
+    entry = TimeEntry(
+        user_id=current_user.id,
+        project_id=request.project_id,
+        work_date=request.work_date,
+        hours=request.hours,
+        notes=request.notes,
+        status="PENDING"
+    )
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    
+    return {
+        "status": "success",
+        "statusCode": 201,
+        "message": "Time entry created successfully",
+        "data": build_entry_response(entry, db),
+        "errors": []
+    }
+
+
+@router.get("/{entry_id}")
+async def get_time_entry(
+    entry_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    entry = db.query(TimeEntry).filter(TimeEntry.id == entry_id).first()
+    if not entry:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Time entry not found"
+        )
+    
+    # Check access
+    if entry.user_id != current_user.id and not check_admin(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
+        )
+    
+    return {
+        "status": "success",
+        "statusCode": 200,
+        "message": "Time entry retrieved successfully",
+        "data": build_entry_response(entry, db),
+        "errors": []
+    }
+
+
+@router.put("/{entry_id}")
+async def update_time_entry(
+    entry_id: int,
+    request: TimeEntryUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    try:
+        entry = db.query(TimeEntry).filter(TimeEntry.id == entry_id).first()
+        if not entry:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Time entry not found"
+            )
+        
+        # Only owner can update
+        if entry.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied"
+            )
+        
+        # Allow updating PENDING entries and REJECTED entries (for resubmission)
+        if entry.status not in ["PENDING", "REJECTED"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot modify approved entries. Only pending or rejected entries can be edited."
+            )
+        
+        # If updating a rejected entry, prepare for resubmission
+        is_resubmitting = entry.status == "REJECTED"
+        
+        # Validate hours if provided
+        if request.hours is not None:
+            try:
+                hours_decimal = request.hours if isinstance(request.hours, type(1.0)) or hasattr(request.hours, '__float__') else float(request.hours)
+                if hours_decimal < 0 or hours_decimal > 24:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Hours must be between 0 and 24"
+                    )
+            except (ValueError, TypeError) as e:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid hours value: {str(e)}"
+                )
+        
+        if request.project_id is not None:
+            # Verify project exists
+            project = db.query(Project).filter(Project.id == request.project_id).first()
+            if not project:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid project ID"
+                )
+            entry.project_id = request.project_id
+        
+        if request.work_date is not None:
+            entry.work_date = request.work_date
+        if request.hours is not None:
+            entry.hours = request.hours
+        if request.notes is not None:
+            entry.notes = request.notes
+        
+        # If this is a resubmission, reset status to PENDING
+        if is_resubmitting:
+            entry.status = "PENDING"
+            entry.rejection_reason = None
+            entry.approved_by_id = None
+            entry.approval_date = None
+        
+        db.add(entry)
+        db.commit()
+        db.refresh(entry)
+        
+        return {
+            "status": "success",
+            "statusCode": 200,
+            "message": "Time entry updated successfully",
+            "data": build_entry_response(entry, db),
+            "errors": []
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        print(f"Error updating time entry: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error updating time entry: {str(e)}"
+        )
+@router.delete("/{entry_id}")
+async def delete_time_entry(
+    entry_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    entry = db.query(TimeEntry).filter(TimeEntry.id == entry_id).first()
+    if not entry:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Time entry not found"
+        )
+    
+    if entry.user_id != current_user.id and not check_admin(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
+        )
+    
+    if entry.status == "APPROVED":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot delete approved entries"
+        )
+    
+    db.delete(entry)
+    db.commit()
+    
+    return {
+        "status": "success",
+        "statusCode": 200,
+        "message": "Time entry deleted successfully",
+        "data": None,
+        "errors": []
+    }
+
+
+@router.post("/{entry_id}/approve")
+async def approve_time_entry(
+    entry_id: int,
+    request: TimeEntryApproval,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    entry = db.query(TimeEntry).filter(TimeEntry.id == entry_id).first()
+    if not entry:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Time entry not found"
+        )
+    
+    # Get project to check if user is manager
+    project = db.query(Project).filter(Project.id == entry.project_id).first()
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
+    
+    # Check if user can approve (admin or project manager)
+    if not check_admin(current_user) and project.manager_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only admin or project manager can approve entries"
+        )
+    
+    if entry.status != "PENDING":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Entry is not pending approval"
+        )
+    
+    if request.status == "APPROVED":
+        entry.status = "APPROVED"
+        entry.approved_by_id = current_user.id
+        entry.approval_date = datetime.utcnow()
+    elif request.status == "REJECTED":
+        entry.status = "REJECTED"
+        entry.rejection_reason = request.rejection_reason
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid status. Must be APPROVED or REJECTED"
+        )
+    
+    db.commit()
+    db.refresh(entry)
+    
+    # Send notification email
+    user = db.query(User).filter(User.id == entry.user_id).first()
+    if user:
+        await email_service.send_approval_notification(
+            employee_email=user.email,
+            employee_name=user.name,
+            entry_details=build_entry_response(entry, db),
+            status=entry.status,
+            rejection_reason=entry.rejection_reason
+        )
+    
+    return {
+        "status": "success",
+        "statusCode": 200,
+        "message": f"Time entry {entry.status.lower()}",
+        "data": build_entry_response(entry, db),
+        "errors": []
+    }
+
+
+@router.post("/{entry_id}/resubmit")
+async def resubmit_time_entry(
+    entry_id: int,
+    request: TimeEntryResubmit,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    entry = db.query(TimeEntry).filter(TimeEntry.id == entry_id).first()
+    if not entry:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Time entry not found"
+        )
+    
+    if entry.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied"
+        )
+    
+    if entry.status != "REJECTED":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only rejected entries can be resubmitted"
+        )
+    
+    entry.status = "PENDING"
+    entry.rejection_reason = None
+    entry.approved_by_id = None
+    entry.approval_date = None
+    
+    if request.hours is not None:
+        entry.hours = request.hours
+    if request.notes is not None:
+        entry.notes = request.notes
+    if request.resubmission_notes is not None:
+        entry.resubmission_notes = request.resubmission_notes
+    
+    db.commit()
+    db.refresh(entry)
+    
+    return {
+        "status": "success",
+        "statusCode": 200,
+        "message": "Time entry resubmitted successfully",
+        "data": build_entry_response(entry, db),
+        "errors": []
+    }
+
+
+@router.get("/pending/approvals")
+async def get_pending_approvals(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all pending entries for projects managed by current user."""
+    if not check_admin(current_user) and not check_manager(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Manager access required"
+        )
+    
+    # Get projects where user is manager
+    managed_projects = db.query(Project).filter(
+        Project.manager_id == current_user.id
+    ).all()
+    
+    project_ids = [p.id for p in managed_projects]
+    
+    if check_admin(current_user):
+        # Admin can see all pending entries
+        entries = db.query(TimeEntry).filter(
+            TimeEntry.status == "PENDING"
+        ).all()
+    else:
+        # Manager can only see entries for their projects
+        entries = db.query(TimeEntry).filter(
+            TimeEntry.status == "PENDING",
+            TimeEntry.project_id.in_(project_ids)
+        ).all()
+    
+    return {
+        "status": "success",
+        "statusCode": 200,
+        "message": "Pending approvals retrieved successfully",
+        "data": [build_entry_response(e, db) for e in entries],
+        "errors": []
+    }
+
+
+
+
+
+
+
+
+--- FILE: \app\api\users.py ---
+
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy.orm import Session
+from app.core.database import get_db
+from app.api.auth import get_current_user
+from app.models.models import User, Role, UserRole
+from app.schemas.schemas import (
+    UserCreate, UserUpdate, UserResponse, APIResponse, RoleValueResponse
+)
+
+router = APIRouter()
+def check_admin_or_manager(user: User) -> bool:
+    return any(role.name in ["Admin", "Manager"] for role in user.roles)
+
+
+def check_admin(user: User) -> bool:
+    return any(role.name == "Admin" for role in user.roles)
+
+
+def build_user_response(user: User, db: Session) -> dict:
+    manager_name = None
+    if user.parent_id:
+        manager = db.query(User).filter(User.id == user.parent_id).first()
+        if manager:
+            manager_name = manager.name
+    
+    roles = [{"id": str(r.id), "value": r.name} for r in user.roles]
+    
+    return {
+        "id": user.id,
+        "name": user.name,
+        "email": user.email,
+        "status": user.status,
+        "parent_id": user.parent_id,
+        "manager_name": manager_name,
+        "created_at": user.created_at.isoformat(),
+        "roles": roles
+    }
+
+
+@router.get("/me")
+async def get_current_user_info(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    return {
+        "status": "success",
+        "statusCode": 200,
+        "message": "Current user info retrieved",
+        "data": build_user_response(current_user, db),
+        "errors": []
+    }
+
+
+@router.get("")
+async def list_users(
+    page: int = Query(1, ge=1),
+    size: int = Query(100, ge=1, le=100),
+    status_filter: Optional[bool] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if not check_admin_or_manager(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin or Manager access required"
+        )
+    
+    query = db.query(User)
+    
+    if status_filter is not None:
+        query = query.filter(User.status == status_filter)
+    
+    total = query.count()
+    users = query.offset((page - 1) * size).limit(size).all()
+    
+    return {
+        "status": "success",
+        "statusCode": 200,
+        "message": "Users retrieved successfully",
+        "data": {
+            "users": [build_user_response(u, db) for u in users],
+            "total": total,
+            "page": page,
+            "size": size
+        },
+        "errors": []
+    }
+
+
+@router.post("")
+async def create_user(
+    request: UserCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if not check_admin(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    
+    # Check email exists
+    existing = db.query(User).filter(User.email == request.email).first()
+    if existing:
+        return {
+            "status": "error",
+            "statusCode": 400,
+            "message": "Email already registered",
+            "data": None,
+            "errors": ["Email already registered"]
+        }
+    
+    from app.core.security import hash_password
+    
+    # Use default password if not provided
+    default_password = "Tickmarks@123"
+    
+    user = User(
+        name=request.name,
+        email=request.email,
+        password_hash=hash_password(request.password or "Tickmarks@123"),
+        status=True,
+        email_verified=True,  # ← AUTO-VERIFIED (admin created them)
+        verification_token=None  # ← No token needed
+    )
+    db.add(user)
+    db.commit()
+    
+    # NO email sent - user is ready to login immediately
+    
+    return {"message": "User created with default password 'Tickmarks@123'"}
+    db.refresh(user)
+    
+    # Assign roles
+    for role_name in request.roles:
+        role = db.query(Role).filter(Role.name == role_name).first()
+        if role:
+            user_role = UserRole(user_id=user.id, role_id=role.id)
+            db.add(user_role)
+    
+    if not request.roles:
+        member_role = db.query(Role).filter(Role.name == "Member").first()
+        if member_role:
+            user_role = UserRole(user_id=user.id, role_id=member_role.id)
+            db.add(user_role)
+    
+    db.commit()
+    
+    return {
+        "status": "success",
+        "statusCode": 201,
+        "message": "User created successfully with default password 'Tickmarks@123'",
+        "data": build_user_response(user, db),
+        "errors": []
+    }
+
+
+@router.get("/{user_id}")
+async def get_user(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    return {
+        "status": "success",
+        "statusCode": 200,
+        "message": "User retrieved successfully",
+        "data": build_user_response(user, db),
+        "errors": []
+    }
+
+
+@router.put("/{user_id}")
+async def update_user(
+    user_id: int,
+    request: UserUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if not check_admin(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    if request.name is not None:
+        user.name = request.name
+    if request.email is not None:
+        user.email = request.email
+    if request.status is not None:
+        user.status = request.status
+    if request.parent_id is not None:
+        user.parent_id = request.parent_id
+    
+    db.commit()
+    db.refresh(user)
+    
+    return {
+        "status": "success",
+        "statusCode": 200,
+        "message": "User updated successfully",
+        "data": build_user_response(user, db),
+        "errors": []
+    }
+
+
+@router.delete("/{user_id}")
+async def delete_user(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if not check_admin(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    # Soft delete
+    user.status = False
+    db.commit()
+    
+    return {
+        "status": "success",
+        "statusCode": 200,
+        "message": "User deactivated successfully",
+        "data": None,
+        "errors": []
+    }
+
+
+@router.put("/{user_id}/roles")
+async def update_user_roles(
+    user_id: int,
+    roles: List[str],
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if not check_admin(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    # Remove existing roles
+    db.query(UserRole).filter(UserRole.user_id == user_id).delete()
+    
+    # Add new roles
+    for role_name in roles:
+        role = db.query(Role).filter(Role.name == role_name).first()
+        if role:
+            user_role = UserRole(user_id=user_id, role_id=role.id)
+            db.add(user_role)
+    
+    db.commit()
+    db.refresh(user)
+    
+    return {
+        "status": "success",
+        "statusCode": 200,
+        "message": "User roles updated successfully",
+        "data": build_user_response(user, db),
+        "errors": []
+    }
+
+
+@router.get("/managers/list")
+async def list_managers(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    managers = db.query(User).join(UserRole).join(Role).filter(
+        Role.name.in_(["Admin", "Manager"])
+    ).distinct().all()
+    
+    return {
+        "status": "success",
+        "statusCode": 200,
+        "message": "Managers retrieved successfully",
+        "data": [{"id": m.id, "name": m.name, "email": m.email} for m in managers],
+        "errors": []
+    }
+
+
+@router.post("/{user_id}/reset-password")
+async def reset_user_password(
+    user_id: int,
+    request: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Admin endpoint to reset a user's password"""
+    if not check_admin(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    
+    new_password = request.get('new_password')
+    if not new_password or len(new_password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be at least 6 characters"
+        )
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    from app.core.security import hash_password
+    
+    user.password_hash = hash_password(new_password)
+    db.commit()
+    
+    # Send password changed notification email
+    try:
+        from app.services.email_service import email_service
+        await email_service.send_password_changed_email(
+            email=user.email,
+            name=user.name,
+            changed_by=current_user.name
+        )
+    except Exception as e:
+        print(f"Failed to send password changed email: {str(e)}")
+    
+    return {
+        "status": "success",
+        "statusCode": 200,
+        "message": f"Password reset for {user.name}. Notification sent to {user.email}",
+        "data": None,
+        "errors": []
+    }
+
+
+
+
+
+
+
+
+
+
+--- FILE: \app\api\__init__.py ---
+
+
+
+
+
+
+
+--- FILE: \app\core\config.py ---
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from typing import Optional
+import os
+
+class Settings(BaseSettings):
+    DATABASE_URL: str = ""
+    ENVIRONMENT: str = "production"
+    
+    # JWT Settings
+    JWT_SECRET_KEY: str = "7f3b89e2c1d4a0f6b8e2d4c1a0f6b8e2"
+    ALGORITHM: str = "HS256"
+    JWT_ALG: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    
+    FRONTEND_URL: str = "https://timesheetick.vercel.app"
+    
+    # SMTP
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    SMTP_FROM: str = "noreply@example.com"
+
+    model_config = SettingsConfigDict(
+        env_file=".env", 
+        case_sensitive=True, 
+        extra="ignore"
+    )
+
+settings = Settings()
+
+# Log configuration on startup
+print("=" * 50)
+print("Configuration Loaded:")
+print(f"  Environment: {settings.ENVIRONMENT}")
+print(f"  DATABASE_URL: {'SET' if settings.DATABASE_URL else 'NOT SET'}")
+print(f"  Frontend URL: {settings.FRONTEND_URL}")
+print("=" * 50)
+
+
+--- FILE: \app\core\database.py ---
+
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from app.core.config import settings
+
+# Initialize database connection safely
+engine = None
+SessionLocal = None
+
+try:
+    if settings.DATABASE_URL:
+        engine = create_engine(
+            settings.DATABASE_URL,
+            pool_pre_ping=True,
+            pool_recycle=3600,
+            echo=settings.ENVIRONMENT == "development"
+        )
+        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+        print("? Database engine initialized")
+    else:
+        print("? DATABASE_URL not configured - API will run but database features unavailable")
+except Exception as e:
+    print(f"? Database initialization error: {str(e)}")
+    print("  API will still start but database operations will fail")
+
+Base = declarative_base()
+
+
+def get_db():
+    if SessionLocal is None:
+        raise RuntimeError("Database not configured. Set DATABASE_URL environment variable.")
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+
+
+
+--- FILE: \app\core\security.py ---
+
+import os
+from datetime import datetime, timedelta
+from typing import Optional
+from jose import jwt
+from passlib.context import CryptContext
+
+# Setup password hashing
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+SECRET_KEY = os.getenv("JWT_SECRET_KEY", "7f3b89e2c1d4a0f6b8e2d4c1a0f6b8e2")
+ALGORITHM = "HS256"
+
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=15))
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+def decode_access_token(token: str):
+    try:
+        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except Exception:
+        return None
+
+
+--- FILE: \app\core\__init__.py ---
+
+
+
+
+
+
+
+--- FILE: \app\db\base.py ---
+
+from sqlalchemy.ext.declarative import declarative_base
+Base = declarative_base()
+
+
+--- FILE: \app\db\session.py ---
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, declarative_base
+from app.core.config import settings
+
+engine = create_engine(settings.DATABASE_URL.replace('postgres://', 'postgresql://'))
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+--- FILE: \app\models\models.py ---
+
+from datetime import datetime
+from sqlalchemy import Column, BigInteger, String, Boolean, DateTime, ForeignKey, Text, DECIMAL, Date, UniqueConstraint, CheckConstraint
+from sqlalchemy.orm import relationship
+from app.core.database import Base
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    name = Column(String(255), nullable=False)
+    email = Column(String(255), nullable=False, unique=True, index=True)
+    password_hash = Column(String(255), nullable=False)
+    status = Column(Boolean, nullable=False, default=True)
+    parent_id = Column(BigInteger, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    email_verified = Column(Boolean, nullable=False, default=False)
+    verification_token = Column(String(255), nullable=True)
+    password_reset_token = Column(String(255), nullable=True)
+    password_reset_token_expires = Column(DateTime, nullable=True)
+
+    # Relationships
+    manager = relationship("User", remote_side=[id], backref="subordinates")
+    roles = relationship("Role", secondary="user_roles", back_populates="users")
+    projects = relationship("Project", secondary="project_members", back_populates="members")
+    time_entries = relationship("TimeEntry", back_populates="user", foreign_keys="[TimeEntry.user_id]")
+    managed_projects = relationship("Project", back_populates="manager")
+
+    def __repr__(self):
+        return f"<User(id={self.id}, name='{self.name}', email='{self.email}')>"
+
+
+class Role(Base):
+    __tablename__ = "roles"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    name = Column(String(50), nullable=False, unique=True)
+
+    # Relationships
+    users = relationship("User", secondary="user_roles", back_populates="roles")
+
+    def __repr__(self):
+        return f"<Role(id={self.id}, name='{self.name}')>"
+
+
+class UserRole(Base):
+    __tablename__ = "user_roles"
+
+    user_id = Column(BigInteger, ForeignKey("users.id"), primary_key=True)
+    role_id = Column(BigInteger, ForeignKey("roles.id"), primary_key=True)
+
+    def __repr__(self):
+        return f"<UserRole(user_id={self.user_id}, role_id={self.role_id})>"
+
+
+class Project(Base):
+    __tablename__ = "projects"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    name = Column(String(255), nullable=False)
+    client = Column(String(255), nullable=False)
+    status = Column(Boolean, nullable=False, default=True)
+    manager_id = Column(BigInteger, ForeignKey("users.id"), nullable=False)
+    reporting_area = Column(String(255), nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    # Relationships
+    manager = relationship("User", back_populates="managed_projects")
+    members = relationship("User", secondary="project_members", back_populates="projects")
+    time_entries = relationship("TimeEntry", back_populates="project")
+
+    def __repr__(self):
+        return f"<Project(id={self.id}, name='{self.name}', client='{self.client}')>"
+
+
+class ProjectMember(Base):
+    __tablename__ = "project_members"
+
+    project_id = Column(BigInteger, ForeignKey("projects.id"), primary_key=True)
+    user_id = Column(BigInteger, ForeignKey("users.id"), primary_key=True)
+    bill_rate = Column(DECIMAL(10, 2), nullable=True)
+
+    def __repr__(self):
+        return f"<ProjectMember(project_id={self.project_id}, user_id={self.user_id})>"
+
+
+class TimeEntry(Base):
+    __tablename__ = "time_entries"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, ForeignKey("users.id"), nullable=False)
+    project_id = Column(BigInteger, ForeignKey("projects.id"), nullable=False)
+    work_date = Column(Date, nullable=False)
+    hours = Column(DECIMAL(5, 2), nullable=False)
+    notes = Column(Text, nullable=True)
+    status = Column(String(20), nullable=False, default="PENDING")
+    approved_by_id = Column(BigInteger, ForeignKey("users.id"), nullable=True)
+    approval_date = Column(DateTime, nullable=True)
+    rejection_reason = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    resubmission_notes = Column(Text, nullable=True)
+
+    # Relationships
+    user = relationship("User", foreign_keys=[user_id], back_populates="time_entries")
+    project = relationship("Project", back_populates="time_entries")
+    approved_by = relationship("User", foreign_keys=[approved_by_id])
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "project_id", "work_date", name="uq_time_entries_user_project_date"),
+        CheckConstraint("hours >= 0 AND hours <= 24", name="check_hours_range"),
+    )
+
+    def __repr__(self):
+        return f"<TimeEntry(id={self.id}, user_id={self.user_id}, date={self.work_date}, hours={self.hours})>"
+
+
+
+
+
+--- FILE: \app\models\__init__.py ---
+
+
+
+
+
+
+
+--- FILE: \app\schemas\schemas.py ---
+
+from datetime import datetime, date
+from typing import Optional, List
+from pydantic import BaseModel, EmailStr
+from decimal import Decimal
+
+
+# Role Schemas
+class RoleBase(BaseModel):
+    name: str
+
+
+class RoleResponse(BaseModel):
+    id: int
+    name: str
+
+    class Config:
+        from_attributes = True
+
+
+class RoleValueResponse(BaseModel):
+    id: str
+    value: str
+
+
+# User Schemas
+class UserBase(BaseModel):
+    name: str
+    email: EmailStr
+
+
+class UserCreate(UserBase):
+    password: Optional[str] = None  # Make password optional
+    parent_id: Optional[int] = None
+    roles: List[str] = []
+
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    status: Optional[bool] = None
+    parent_id: Optional[int] = None
+
+
+class UserResponse(BaseModel):
+    id: int
+    name: str
+    email: str
+    status: bool
+    parent_id: Optional[int]
+    manager_name: Optional[str] = None
+    created_at: datetime
+    roles: List[RoleValueResponse] = []
+
+    class Config:
+        from_attributes = True
+
+
+class UserProfileResponse(BaseModel):
+    id: int
+    name: str
+    email: str
+    status: bool
+    parent_id: Optional[int]
+    manager_name: Optional[str] = None
+    created_at: datetime
+    roles: List[RoleValueResponse] = []
+
+    class Config:
+        from_attributes = True
+
+
+# Auth Schemas
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class RegisterRequest(BaseModel):
+    name: str
+    email: EmailStr
+    password: str
+    parent_id: Optional[int] = None
+    roles: List[str] = []
+
+
+class TokenResponse(BaseModel):
+    token: str
+    profile: UserProfileResponse
+
+
+class LoginResponse(BaseModel):
+    status: str
+    statusCode: int
+    message: str
+    data: Optional[TokenResponse]
+    errors: List[str] = []
+
+
+# Project Schemas
+class ProjectBase(BaseModel):
+    name: str
+    client: str
+    manager_id: int
+    reporting_area: Optional[str] = None
+
+
+class ProjectCreate(ProjectBase):
+    pass
+
+
+class ProjectUpdate(BaseModel):
+    name: Optional[str] = None
+    client: Optional[str] = None
+    status: Optional[bool] = None
+    manager_id: Optional[int] = None
+    reporting_area: Optional[str] = None
+
+
+class ProjectResponse(BaseModel):
+    id: int
+    name: str
+    client: str
+    status: bool
+    manager_id: int
+    manager_name: Optional[str] = None
+    reporting_area: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ProjectMemberAdd(BaseModel):
+    user_id: int
+    bill_rate: Optional[Decimal] = None
+
+
+class ProjectMemberResponse(BaseModel):
+    user_id: int
+    user_name: str
+    user_email: str
+    bill_rate: Optional[Decimal]
+
+    class Config:
+        from_attributes = True
+
+
+# Time Entry Schemas
+class TimeEntryBase(BaseModel):
+    project_id: int
+    work_date: date
+    hours: Decimal
+    notes: Optional[str] = None
+
+
+class TimeEntryCreate(TimeEntryBase):
+    pass
+
+
+class TimeEntryUpdate(BaseModel):
+    project_id: Optional[int] = None
+    work_date: Optional[date] = None
+    hours: Optional[Decimal] = None
+    notes: Optional[str] = None
+    
+    class Config:
+        json_encoders = {
+            Decimal: lambda v: float(v) if v is not None else None
+        }
+
+
+class TimeEntryResponse(BaseModel):
+    id: int
+    user_id: int
+    user_name: str
+    project_id: int
+    project_name: str
+    work_date: date
+    hours: Decimal
+    notes: Optional[str]
+    status: str
+    approved_by_id: Optional[int]
+    approved_by_name: Optional[str] = None
+    approval_date: Optional[datetime]
+    rejection_reason: Optional[str]
+    resubmission_notes: Optional[str]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class TimeEntryApproval(BaseModel):
+    status: str  # APPROVED or REJECTED
+    rejection_reason: Optional[str] = None
+
+
+class TimeEntryResubmit(BaseModel):
+    hours: Optional[Decimal] = None
+    notes: Optional[str] = None
+    resubmission_notes: Optional[str] = None
+
+
+# Report Schemas
+class ReportFilter(BaseModel):
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    project_id: Optional[int] = None
+    user_id: Optional[int] = None
+    reporting_area: Optional[str] = None
+
+
+class DailySummary(BaseModel):
+    date: date
+    total_hours: Decimal
+    entries: List[TimeEntryResponse]
+
+
+class ProjectSummary(BaseModel):
+    project_id: int
+    project_name: str
+    client: str
+    reporting_area: Optional[str]
+    total_hours: Decimal
+    user_summaries: List[dict]
+
+
+class UserHoursSummary(BaseModel):
+    user_id: int
+    user_name: str
+    total_hours: Decimal
+    project_breakdown: List[dict]
+
+
+# Pagination
+class PaginatedResponse(BaseModel):
+    total: int
+    page: int
+    size: int
+
+
+# Standard API Response
+class APIResponse(BaseModel):
+    status: str
+    statusCode: int
+    message: str
+    data: Optional[dict] = None
+    errors: List[str] = []
+
+
+
+
+
+--- FILE: \app\schemas\__init__.py ---
+
+
+
+
+
+
+
+--- FILE: \app\services\email_service.py ---
+
+import asyncio
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from typing import Optional
+import aiosmtplib
+from datetime import datetime
+from app.core.config import settings
+
+
+class EmailService:
+    def __init__(self):
+        self.host = settings.SMTP_HOST
+        self.port = settings.SMTP_PORT
+        self.username = settings.SMTP_USER
+        self.password = settings.SMTP_PASSWORD
+        self.from_email = settings.SMTP_FROM
+        self.frontend_url = settings.FRONTEND_URL
+
+    async def send_email(
+        self,
+        to_email: str,
+        subject: str,
+        html_content: str,
+        text_content: Optional[str] = None
+    ) -> bool:
+        """Send an email using SMTP."""
+        if not self.username or not self.password:
+            print(f"Email not configured. Would send to {to_email}: {subject}")
+            return False
+
+        message = MIMEMultipart("alternative")
+        message["From"] = self.from_email
+        message["To"] = to_email
+        message["Subject"] = subject
+
+        if text_content:
+            message.attach(MIMEText(text_content, "plain"))
+        message.attach(MIMEText(html_content, "html"))
+
+        try:
+            await aiosmtplib.send(
+                message,
+                hostname=self.host,
+                port=self.port,
+                username=self.username,
+                password=self.password,
+                start_tls=True
+            )
+            return True
+        except Exception as e:
+            print(f"Failed to send email: {e}")
+            return False
+
+    async def send_verification_email(self, email: str, name: str, token: str) -> bool:
+        """Send email verification link."""
+        verification_url = f"{self.frontend_url}/verify-email?token={token}"
+        
+        html_content = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+                <h1 style="color: white; margin: 0;">Welcome to Tickmarks TimeTracker</h1>
+            </div>
+            <div style="background: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px;">
+                <p style="font-size: 16px; color: #334155;">Hello {name},</p>
+                <p style="font-size: 16px; color: #334155;">Thank you for registering with Tickmarks TimeTracker. Please verify your email address by clicking the button below:</p>
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{verification_url}" style="background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%); color: white; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Verify Email Address</a>
+                </div>
+                <p style="font-size: 14px; color: #64748b;">Or copy and paste this link into your browser:</p>
+                <p style="font-size: 12px; color: #0d9488; word-break: break-all;">{verification_url}</p>
+                <p style="font-size: 14px; color: #64748b; margin-top: 30px;">This link will expire in 24 hours. If you did not create an account, you can safely ignore this email.</p>
+            </div>
+            <div style="text-align: center; padding: 20px; color: #94a3b8; font-size: 12px;">
+                <p>&copy; {datetime.now().year} Tickmarks. All rights reserved.</p>
+            </div>
+        </body>
+        </html>
+        """
+        
+        text_content = f"""
+        Welcome to Tickmarks TimeTracker
+        
+        Hello {name},
+        
+        Thank you for registering. Please verify your email by visiting:
+        {verification_url}
+        
+        This link will expire in 24 hours.
+        """
+        
+        return await self.send_email(
+            to_email=email,
+            subject="Verify Your Email - Tickmarks TimeTracker",
+            html_content=html_content,
+            text_content=text_content
+        )
+
+    async def send_weekly_report(
+        self,
+        manager_email: str,
+        manager_name: str,
+        pending_entries: list,
+        week_start: str,
+        week_end: str
+    ) -> bool:
+        """Send weekly pending time entries report to manager."""
+        
+        entries_html = ""
+        total_hours = 0
+        
+        for entry in pending_entries:
+            total_hours += float(entry.get('hours', 0))
+            entries_html += f"""
+            <tr>
+                <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">{entry.get('user_name', 'N/A')}</td>
+                <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">{entry.get('project_name', 'N/A')}</td>
+                <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">{entry.get('work_date', 'N/A')}</td>
+                <td style="padding: 12px; border-bottom: 1px solid #e2e8f0; text-align: center;">{entry.get('hours', 0)}</td>
+                <td style="padding: 12px; border-bottom: 1px solid #e2e8f0;">{entry.get('notes', '')}</td>
+            </tr>
+            """
+        
+        approvals_url = f"{self.frontend_url}/approvals"
+        
+        html_content = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;">
+            <div style="background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+                <h1 style="color: white; margin: 0;">Weekly Time Entries Report</h1>
+                <p style="color: rgba(255,255,255,0.9); margin-top: 10px;">{week_start} to {week_end}</p>
+            </div>
+            <div style="background: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px;">
+                <p style="font-size: 16px; color: #334155;">Hello {manager_name},</p>
+                <p style="font-size: 16px; color: #334155;">You have <strong>{len(pending_entries)} time entries</strong> totaling <strong>{total_hours:.2f} hours</strong> pending approval for the past week:</p>
+                
+                <table style="width: 100%; border-collapse: collapse; margin: 20px 0; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                    <thead>
+                        <tr style="background: #0d9488;">
+                            <th style="padding: 12px; color: white; text-align: left;">Employee</th>
+                            <th style="padding: 12px; color: white; text-align: left;">Project</th>
+                            <th style="padding: 12px; color: white; text-align: left;">Date</th>
+                            <th style="padding: 12px; color: white; text-align: center;">Hours</th>
+                            <th style="padding: 12px; color: white; text-align: left;">Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {entries_html}
+                    </tbody>
+                </table>
+                
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{approvals_url}" style="background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%); color: white; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Review & Approve Time Entries</a>
+                </div>
+                
+                <p style="font-size: 14px; color: #64748b; margin-top: 20px;">Please review and approve or reject these entries at your earliest convenience.</p>
+            </div>
+            <div style="text-align: center; padding: 20px; color: #94a3b8; font-size: 12px;">
+                <p>&copy; {datetime.now().year} Tickmarks. All rights reserved.</p>
+                <p>This is an automated message from the TimeTracker system.</p>
+            </div>
+        </body>
+        </html>
+        """
+        
+        return await self.send_email(
+            to_email=manager_email,
+            subject=f"Weekly Time Entries Pending Approval ({week_start} - {week_end})",
+            html_content=html_content
+        )
+
+    async def send_approval_notification(
+        self,
+        employee_email: str,
+        employee_name: str,
+        entry_details: dict,
+        status: str,
+        rejection_reason: Optional[str] = None
+    ) -> bool:
+        """Send notification when time entry is approved or rejected."""
+        
+        status_color = "#10b981" if status == "APPROVED" else "#ef4444"
+        status_text = "Approved" if status == "APPROVED" else "Rejected"
+        
+        rejection_html = ""
+        if rejection_reason:
+            rejection_html = f"""
+            <div style="background: #fef2f2; border-left: 4px solid #ef4444; padding: 15px; margin: 20px 0; border-radius: 4px;">
+                <p style="margin: 0; color: #991b1b; font-weight: bold;">Rejection Reason:</p>
+                <p style="margin: 5px 0 0 0; color: #7f1d1d;">{rejection_reason}</p>
+            </div>
+            """
+        
+        resubmit_info = ""
+        if status == "REJECTED":
+            resubmit_info = f"""
+            <p style="font-size: 14px; color: #334155;">You can resubmit this time entry with corrected information from your timesheet page.</p>
+            """
+        
+        html_content = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+                <h1 style="color: white; margin: 0;">Time Entry {status_text}</h1>
+            </div>
+            <div style="background: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px;">
+                <p style="font-size: 16px; color: #334155;">Hello {employee_name},</p>
+                <p style="font-size: 16px; color: #334155;">Your time entry has been <strong style="color: {status_color};">{status_text.lower()}</strong>:</p>
+                
+                <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                    <p style="margin: 5px 0; color: #64748b;"><strong>Project:</strong> {entry_details.get('project_name', 'N/A')}</p>
+                    <p style="margin: 5px 0; color: #64748b;"><strong>Date:</strong> {entry_details.get('work_date', 'N/A')}</p>
+                    <p style="margin: 5px 0; color: #64748b;"><strong>Hours:</strong> {entry_details.get('hours', 0)}</p>
+                    <p style="margin: 5px 0; color: #64748b;"><strong>Notes:</strong> {entry_details.get('notes', 'None')}</p>
+                </div>
+                
+                {rejection_html}
+                {resubmit_info}
+            </div>
+            <div style="text-align: center; padding: 20px; color: #94a3b8; font-size: 12px;">
+                <p>&copy; {datetime.now().year} Tickmarks. All rights reserved.</p>
+            </div>
+        </body>
+        </html>
+        """
+        
+        return await self.send_email(
+            to_email=employee_email,
+            subject=f"Time Entry {status_text} - Tickmarks TimeTracker",
+            html_content=html_content
+        )
+
+    async def send_password_reset_email(self, email: str, name: str, token: str) -> bool:
+        """Send password reset link."""
+        reset_url = f"{self.frontend_url}/reset-password?token={token}"
+        
+        html_content = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+                <h1 style="color: white; margin: 0;">Password Reset Request</h1>
+            </div>
+            <div style="background: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px;">
+                <p style="font-size: 16px; color: #334155;">Hello {name},</p>
+                <p style="font-size: 16px; color: #334155;">We received a request to reset your password. Click the button below to create a new password:</p>
+                <div style="text-align: center; margin: 30px 0;">
+                    <a href="{reset_url}" style="background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%); color: white; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Reset Password</a>
+                </div>
+                <p style="font-size: 14px; color: #64748b;">Or copy and paste this link into your browser:</p>
+                <p style="font-size: 12px; color: #0d9488; word-break: break-all;">{reset_url}</p>
+                <p style="font-size: 14px; color: #64748b; margin-top: 30px;"><strong>Important:</strong> This link will expire in 24 hours. If you did not request a password reset, please ignore this email or contact support.</p>
+            </div>
+            <div style="text-align: center; padding: 20px; color: #94a3b8; font-size: 12px;">
+                <p>&copy; {datetime.now().year} Tickmarks. All rights reserved.</p>
+            </div>
+        </body>
+        </html>
+        """
+        
+        text_content = f"""
+        Password Reset Request
+        
+        Hello {name},
+        
+        We received a request to reset your password. Visit the link below:
+        {reset_url}
+        
+        This link will expire in 24 hours.
+        If you did not request this, please ignore this email.
+        """
+        
+        return await self.send_email(
+            to_email=email,
+            subject="Reset Your Password - Tickmarks TimeTracker",
+            html_content=html_content,
+            text_content=text_content
+        )
+
+    async def send_password_changed_email(self, email: str, name: str, changed_by: Optional[str] = None) -> bool:
+        """Send password changed notification."""
+        if changed_by:
+            message_text = f"An administrator ({changed_by}) has reset your password."
+            additional_info = f"<p style=\"font-size: 14px; color: #64748b;\">Your password was reset by: <strong>{changed_by}</strong></p>"
+        else:
+            message_text = "Your password has been successfully changed."
+            additional_info = ""
+        
+        html_content = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+                <h1 style="color: white; margin: 0;">Password Changed</h1>
+            </div>
+            <div style="background: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px;">
+                <p style="font-size: 16px; color: #334155;">Hello {name},</p>
+                <p style="font-size: 16px; color: #334155;">{message_text}</p>
+                {additional_info}
+                <p style="font-size: 14px; color: #64748b; margin-top: 20px;">If you did not authorize this change or have any concerns, please contact the support team immediately.</p>
+                <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 15px; margin-top: 20px;">
+                    <p style="font-size: 14px; color: #991b1b; margin: 0;"><strong>Security Tip:</strong> Never share your password with anyone. Our support staff will never ask for your password.</p>
+                </div>
+            </div>
+            <div style="text-align: center; padding: 20px; color: #94a3b8; font-size: 12px;">
+                <p>&copy; {datetime.now().year} Tickmarks. All rights reserved.</p>
+            </div>
+        </body>
+        </html>
+        """
+        
+        return await self.send_email(
+            to_email=email,
+            subject="Your Password Has Been Changed - Tickmarks TimeTracker",
+            html_content=html_content
+        )
+
+
+email_service = EmailService()
+
+
+
+
+
+--- FILE: \app\services\scheduler.py ---
+
+from datetime import datetime, timedelta, date
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.cron import CronTrigger
+from sqlalchemy.orm import Session
+from app.core.database import SessionLocal
+from app.models.models import User, Project, TimeEntry
+from app.services.email_service import email_service
+
+scheduler = AsyncIOScheduler()
+
+
+def get_week_date_range():
+    """Get the start and end dates of the current week."""
+    today = date.today()
+    start = today - timedelta(days=today.weekday())  # Monday
+    end = start + timedelta(days=6)  # Sunday
+    return start, end
+
+
+async def send_weekly_manager_reports():
+    """Send weekly pending time entries report to all project managers."""
+    db = SessionLocal()
+    try:
+        week_start, week_end = get_week_date_range()
+        
+        # Get all active projects with managers
+        projects = db.query(Project).filter(Project.status == True).all()
+        
+        # Group entries by manager
+        manager_entries = {}
+        
+        for project in projects:
+            # Get pending entries for this project in the current week
+            entries = db.query(TimeEntry).filter(
+                TimeEntry.project_id == project.id,
+                TimeEntry.status == "PENDING",
+                TimeEntry.work_date >= week_start,
+                TimeEntry.work_date <= week_end
+            ).all()
+            
+            for entry in entries:
+                user = db.query(User).filter(User.id == entry.user_id).first()
+                
+                entry_data = {
+                    "user_name": user.name if user else "Unknown",
+                    "project_name": project.name,
+                    "work_date": entry.work_date.isoformat(),
+                    "hours": float(entry.hours),
+                    "notes": entry.notes or ""
+                }
+                
+                if project.manager_id not in manager_entries:
+                    manager = db.query(User).filter(User.id == project.manager_id).first()
+                    manager_entries[project.manager_id] = {
+                        "manager_email": manager.email if manager else "",
+                        "manager_name": manager.name if manager else "",
+                        "entries": []
+                    }
+                
+                manager_entries[project.manager_id]["entries"].append(entry_data)
+        
+        # Send emails to each manager
+        for manager_id, data in manager_entries.items():
+            if data["manager_email"] and data["entries"]:
+                await email_service.send_weekly_report(
+                    manager_email=data["manager_email"],
+                    manager_name=data["manager_name"],
+                    pending_entries=data["entries"],
+                    week_start=week_start.strftime("%Y-%m-%d"),
+                    week_end=week_end.strftime("%Y-%m-%d")
+                )
+                
+    finally:
+        db.close()
+
+
+def start_scheduler():
+    """Start the APScheduler for scheduled tasks."""
+    # Schedule weekly report every Sunday at 9 AM
+    scheduler.add_job(
+        send_weekly_manager_reports,
+        CronTrigger(day_of_week="sun", hour=9, minute=0),
+        id="weekly_manager_report",
+        replace_existing=True
+    )
+    
+    scheduler.start()
+    print("Scheduler started. Weekly reports will be sent on Sundays at 9 AM.")
+
+
+def stop_scheduler():
+    """Stop the scheduler."""
+    scheduler.shutdown()
+
+
+
+
+
+--- FILE: \app\services\__init__.py ---
+
+
+
+
+
+

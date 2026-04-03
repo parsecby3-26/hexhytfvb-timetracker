@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: hexhytfvb-backend
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port 10000
+    envVars:
+      - key: DATABASE_URL
+        value: postgresql://postgres.kpotdnigexmoxrkwsowb:nvkBIluO0i0OMtHl@aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres
+      - key: JWT_SECRET_KEY
+        value: nngj5dg8zq13tu5a6a471p
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: ENVIRONMENT
+        value: production
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_USER
+        value: hexhytfvb@gmail.com
+      - key: SMTP_PASSWORD
+        value: tslwyfrciibuedrc
+      - key: SMTP_FROM
+        value: '"hexhytfvb TimeTracker <hexhytfvb@gmail.com>"'
+      - key: FRONTEND_URL
+        value: https://hexhytfvb.vercel.app
+      - key: CRON_SECRET
+        value: hexhytfvb_secure_960

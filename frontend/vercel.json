@@ -1,0 +1,11 @@
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "build",
+  "framework": null,
+  "env": {
+    "REACT_APP_API_URL": ""
+  },
+  "rewrites": [
+    {"source": "/(.*)", "destination": "/index.html"}
+  ]
+}
