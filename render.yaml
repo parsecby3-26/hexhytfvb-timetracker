@@ -26,5 +26,7 @@ services:
         value: '"hexhytfvb TimeTracker <hexhytfvb@gmail.com>"'
       - key: FRONTEND_URL
         value: https://hxf-timetracker-app.vercel.app
+      - key: PYTHON_VERSION
+        value: 3.11.10
       - key: CRON_SECRET
         value: hexhytfvb_secure_960
