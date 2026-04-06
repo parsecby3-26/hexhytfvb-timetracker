@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: hexhytfvb-backend
+    name: hxf-timetracker-api
     runtime: python
     rootDir: backend
     buildCommand: pip install -r requirements.txt
@@ -25,6 +25,6 @@ services:
       - key: SMTP_FROM
         value: '"hexhytfvb TimeTracker <hexhytfvb@gmail.com>"'
       - key: FRONTEND_URL
-        value: https://hexhytfvb.vercel.app
+        value: https://hxf-timetracker-app.vercel.app
       - key: CRON_SECRET
         value: hexhytfvb_secure_960
