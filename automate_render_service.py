@@ -5,6 +5,7 @@ import json
 API_KEY = "rnd_2wgw1mJ8CrzoCaMR2027rbrdjutc"
 REPO_URL = "https://github.com/parsecby3-26/hexhytfvb-timetracker"
 SERVICE_NAME = "hxf-timetracker-api"
+OWNER_ID = "tea-d77n4aia214c73df5b6g"
 
 headers = {
     "Authorization": f"Bearer {API_KEY}",
@@ -18,11 +19,10 @@ def create_service():
     payload = {
         "type": "web_service",
         "name": SERVICE_NAME,
-        "ownerId": "owner-c8p0m6q68p6c738f6b0g", # This might need to be fetched, but I'll try without it first or use the one from previous triggers if available
+        "ownerId": OWNER_ID,
         "repo": REPO_URL,
         "branch": "master",
         "rootDir": "backend",
-        "runtime": "python",
         "envVars": [
             {"key": "DATABASE_URL", "value": "postgresql://postgres.kpotdnigexmoxrkwsowb:nvkBIluO0i0OMtHl@aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres"},
             {"key": "JWT_SECRET_KEY", "value": "nngj5dg8zq13tu5a6a471p"},
@@ -37,13 +37,14 @@ def create_service():
             {"key": "CRON_SECRET", "value": "hexhytfvb_secure_960"}
         ],
         "serviceDetails": {
+            "runtime": "python",
             "buildCommand": "pip install -r requirements.txt",
             "startCommand": "uvicorn app.main:app --host 0.0.0.0 --port 10000",
             "plan": "free"
         }
     }
     
-    print(f"Creating Render Service: {SERVICE_NAME}...")
+    print(f"Creating Render Web Service: {SERVICE_NAME}...")
     response = requests.post(url, json=payload, headers=headers)
     
     if response.status_code in [200, 201]:
