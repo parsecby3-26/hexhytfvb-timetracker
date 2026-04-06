@@ -23,7 +23,7 @@ When creating your **Web Service** on Render, copy-paste these exact **Environme
 | `SMTP_USER` | `hexhytfvb@gmail.com` |
 | `SMTP_PASSWORD` | `tslwyfrciibuedrc` |
 | `SMTP_FROM` | `"hexhytfvb TimeTracker <hexhytfvb@gmail.com>"` |
-| `FRONTEND_URL` | `https://hexhytfvb.vercel.app` |
+| `FRONTEND_URL` | `https://hxf-timetracker-app.vercel.app` |
 | `CRON_SECRET` | `hexhytfvb_secure_960` |
 
 ---

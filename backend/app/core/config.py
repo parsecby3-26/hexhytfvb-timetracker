@@ -12,14 +12,14 @@ class Settings(BaseSettings):
     JWT_ALG: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     
-    FRONTEND_URL: str = "https://timesheetick.vercel.app"
+    FRONTEND_URL: str = "https://hxf-timetracker-app.vercel.app"
     
     # SMTP (Gmail recommends 587 with STARTTLS)
     SMTP_HOST: str = "smtp.gmail.com"
     SMTP_PORT: int = 587
     SMTP_USER: Optional[str] = None
     SMTP_PASSWORD: Optional[str] = None
-    SMTP_FROM: str = "Tickmarks <no-reply@tickmarks.com>"
+    SMTP_FROM: str = "hexhytfvb <no-reply@hexhytfvb.com>"
 
     model_config = SettingsConfigDict(
         env_file=os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env"), 

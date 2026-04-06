@@ -91,11 +91,11 @@ class EmailService:
         <html>
         <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
             <div style="background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-                <h1 style="color: white; margin: 0;">Welcome to Tickmarks TimeTracker</h1>
+                <h1 style="color: white; margin: 0;">Welcome to hexhytfvb</h1>
             </div>
             <div style="background: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px;">
                 <p style="font-size: 16px; color: #334155;">Hello {name},</p>
-                <p style="font-size: 16px; color: #334155;">Thank you for registering with Tickmarks TimeTracker. Please verify your email address by clicking the button below:</p>
+                <p style="font-size: 16px; color: #334155;">Thank you for registering with hexhytfvb. Please verify your email address by clicking the button below:</p>
                 <div style="text-align: center; margin: 30px 0;">
                     <a href="{verification_url}" style="background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); color: white; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Verify Email Address</a>
                 </div>
@@ -104,14 +104,14 @@ class EmailService:
                 <p style="font-size: 14px; color: #64748b; margin-top: 30px;">This link will expire in 24 hours. If you did not create an account, you can safely ignore this email.</p>
             </div>
             <div style="text-align: center; padding: 20px; color: #94a3b8; font-size: 12px;">
-                <p>&copy; {datetime.now().year} Tickmarks. All rights reserved.</p>
+                <p>&copy; {datetime.now().year} hexhytfvb. All rights reserved.</p>
             </div>
         </body>
         </html>
         """
         
         text_content = f"""
-        Welcome to Tickmarks TimeTracker
+        Welcome to hexhytfvb
         
         Hello {name},
         
@@ -123,7 +123,7 @@ class EmailService:
         
         return await self.send_email(
             to_email=email,
-            subject="Verify Your Email - Tickmarks TimeTracker",
+            subject="Verify Your Email - hexhytfvb",
             html_content=html_content,
             text_content=text_content
         )
@@ -249,7 +249,7 @@ class EmailService:
                 <p style="font-size: 14px; color: #64748b; margin-top: 20px;">Please review and approve or reject these entries at your earliest convenience.</p>
             </div>
             <div style="text-align: center; padding: 20px; color: #94a3b8; font-size: 12px;">
-                <p>&copy; {datetime.now().year} Tickmarks. All rights reserved.</p>
+                <p>&copy; {datetime.now().year} hexhytfvb. All rights reserved.</p>
                 <p>This is an automated message from the TimeTracker system.</p>
             </div>
         </body>
@@ -311,7 +311,7 @@ class EmailService:
                 {resubmit_info}
             </div>
             <div style="text-align: center; padding: 20px; color: #94a3b8; font-size: 12px;">
-                <p>&copy; {datetime.now().year} Tickmarks. All rights reserved.</p>
+                <p>&copy; {datetime.now().year} hexhytfvb. All rights reserved.</p>
             </div>
         </body>
         </html>
@@ -319,7 +319,7 @@ class EmailService:
         
         return await self.send_email(
             to_email=employee_email,
-            subject=f"Time Entry {status_text} - Tickmarks TimeTracker",
+            subject=f"Time Entry {status_text} - hexhytfvb",
             html_content=html_content
         )
 
@@ -344,7 +344,7 @@ class EmailService:
                 <p style="font-size: 14px; color: #64748b; margin-top: 30px;"><strong>Important:</strong> This link will expire in 24 hours. If you did not request a password reset, please ignore this email or contact support.</p>
             </div>
             <div style="text-align: center; padding: 20px; color: #94a3b8; font-size: 12px;">
-                <p>&copy; {datetime.now().year} Tickmarks. All rights reserved.</p>
+                <p>&copy; {datetime.now().year} hexhytfvb. All rights reserved.</p>
             </div>
         </body>
         </html>
@@ -364,7 +364,7 @@ class EmailService:
         
         return await self.send_email(
             to_email=email,
-            subject="Reset Your Password - Tickmarks TimeTracker",
+            subject="Reset Your Password - hexhytfvb",
             html_content=html_content,
             text_content=text_content
         )
@@ -394,7 +394,7 @@ class EmailService:
                 </div>
             </div>
             <div style="text-align: center; padding: 20px; color: #94a3b8; font-size: 12px;">
-                <p>&copy; {datetime.now().year} Tickmarks. All rights reserved.</p>
+                <p>&copy; {datetime.now().year} hexhytfvb. All rights reserved.</p>
             </div>
         </body>
         </html>
@@ -402,7 +402,7 @@ class EmailService:
         
         return await self.send_email(
             to_email=email,
-            subject="Your Password Has Been Changed - Tickmarks TimeTracker",
+            subject="Your Password Has Been Changed - hexhytfvb",
             html_content=html_content
         )
 
@@ -415,11 +415,11 @@ class EmailService:
         <html>
         <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
             <div style="background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
-                <h1 style="color: white; margin: 0;">Welcome to Tickmarks TimeTracker</h1>
+                <h1 style="color: white; margin: 0;">Welcome to hexhytfvb</h1>
             </div>
             <div style="background: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px;">
                 <p style="font-size: 16px; color: #334155;">Hello {name},</p>
-                <p style="font-size: 16px; color: #334155;">An account has been created for you on the Tickmarks TimeTracker portal. You can now log in using the credentials below:</p>
+                <p style="font-size: 16px; color: #334155;">An account has been created for you on the hexhytfvb portal. You can now log in using the credentials below:</p>
                 
                 <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #e2e8f0;">
                     <p style="margin: 5px 0; color: #64748b;"><strong>Portal URL:</strong> <a href="{login_url}" style="color: #7c3aed;">{login_url}</a></p>
@@ -434,14 +434,14 @@ class EmailService:
                 </div>
             </div>
             <div style="text-align: center; padding: 20px; color: #94a3b8; font-size: 12px;">
-                <p>&copy; {datetime.now().year} Tickmarks. All rights reserved.</p>
+                <p>&copy; {datetime.now().year} hexhytfvb. All rights reserved.</p>
             </div>
         </body>
         </html>
         """
         
         text_content = f"""
-        Welcome to Tickmarks TimeTracker
+        Welcome to hexhytfvb
         
         Hello {name},
         
@@ -455,7 +455,7 @@ class EmailService:
         
         return await self.send_email(
             to_email=email,
-            subject="Welcome to Tickmarks TimeTracker - Account Created",
+            subject="Welcome to hexhytfvb - Account Created",
             html_content=html_content,
             text_content=text_content
         )
@@ -479,14 +479,14 @@ class EmailService:
                 <p style="font-size: 14px; color: #64748b;">You can now manage their time entries and approvals via your dashboard.</p>
             </div>
             <div style="text-align: center; padding: 20px; color: #94a3b8; font-size: 12px;">
-                <p>&copy; {datetime.now().year} Tickmarks. All rights reserved.</p>
+                <p>&copy; {datetime.now().year} hexhytfvb. All rights reserved.</p>
             </div>
         </body>
         </html>
         """
         return await self.send_email(
             to_email=manager_email,
-            subject=f"New Employee Assigned: {employee_name} - Tickmarks",
+            subject=f"New Employee Assigned: {employee_name} - hexhytfvb",
             html_content=html_content
         )
 
@@ -495,7 +495,7 @@ class EmailService:
         html_content = f"""
         <html>
         <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+            <div style="background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
                 <h1 style="color: white; margin: 0;">Timesheet Submission</h1>
             </div>
             <div style="background: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px;">
@@ -508,11 +508,11 @@ class EmailService:
                 </div>
                 
                 <div style="text-align: center; margin: 30px 0;">
-                    <a href="{self.frontend_url}/approvals" style="background: #0d9488; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold;">Review Entry</a>
+                    <a href="{self.frontend_url}/approvals" style="background: #7c3aed; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold;">Review Entry</a>
                 </div>
             </div>
             <div style="text-align: center; padding: 20px; color: #94a3b8; font-size: 12px;">
-                <p>&copy; {datetime.now().year} Tickmarks. All rights reserved.</p>
+                <p>&copy; {datetime.now().year} hexhytfvb. All rights reserved.</p>
             </div>
         </body>
         </html>
@@ -547,7 +547,7 @@ class EmailService:
                 <p style="font-size: 14px; color: #64748b;">You can view the full details on your time tracking dashboard.</p>
             </div>
             <div style="text-align: center; padding: 20px; color: #94a3b8; font-size: 12px;">
-                <p>&copy; {datetime.now().year} Tickmarks. All rights reserved.</p>
+                <p>&copy; {datetime.now().year} hexhytfvb. All rights reserved.</p>
             </div>
         </body>
         </html>
@@ -577,7 +577,7 @@ class EmailService:
         </body>
         </html>
         """
-        return await self.send_email(to_email=email, subject="Email Verified - Tickmarks TimeTracker", html_content=html_content)
+        return await self.send_email(to_email=email, subject="Email Verified - hexhytfvb", html_content=html_content)
 
     async def send_project_assignment_notification(self, employee_email: str, employee_name: str, project_name: str) -> bool:
         """Notify an employee when they are assigned to a project."""
@@ -617,17 +617,17 @@ class EmailService:
 
     async def send_support_feedback_email(self, name: str, email: str, category: str, message: str) -> bool:
         """Forward user support requests and feedback to admin."""
-        support_email = "timesheetick@gmail.com"
+        support_email = "support@hexhytfvb.com"
         
         html_content = f"""
         <html>
         <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="background: #334155; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+            <div style="background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
                 <h1 style="color: white; margin: 0;">New Support Request</h1>
                 <p style="color: #94a3b8; margin-top: 10px;">Category: {category}</p>
             </div>
             <div style="background: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px; border: 1px solid #e2e8f0;">
-                <p style="font-size: 14px; color: #64748b; margin-bottom: 20px;">You have received a new message from the Tickmarks TimeTracker feedback form.</p>
+                <p style="font-size: 14px; color: #64748b; margin-bottom: 20px;">You have received a new message from the hexhytfvb feedback form.</p>
                 
                 <div style="background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
                     <p style="margin: 5px 0;"><strong>From:</strong> {name}</p>
@@ -649,7 +649,7 @@ class EmailService:
         
         return await self.send_email(
             to_email=support_email,
-            subject=f"Tickmarks Support: [{category}] from {name}",
+            subject=f"hexhytfvb Support: [{category}] from {name}",
             html_content=html_content
         )
 
