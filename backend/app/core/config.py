@@ -14,9 +14,9 @@ class Settings(BaseSettings):
     
     FRONTEND_URL: str = "https://hxf-timetracker-app.vercel.app"
     
-    # SMTP (Gmail recommends 587 with STARTTLS)
+    # SMTP (Gmail recommends 587 with STARTTLS, but we use 465 to bypass Render firewall)
     SMTP_HOST: str = "smtp.gmail.com"
-    SMTP_PORT: int = 587
+    SMTP_PORT: int = 465
     SMTP_USER: Optional[str] = None
     SMTP_PASSWORD: Optional[str] = None
     SMTP_FROM: str = "hexhytfvb <hexhytfvb@gmail.com>"
