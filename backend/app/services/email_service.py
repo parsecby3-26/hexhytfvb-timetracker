@@ -24,12 +24,15 @@ class EmailService:
         text_content: Optional[str] = None
     ) -> bool:
         """Send an email using SMTP."""
-        if not self.username or not self.password:
-            print(f"Email not configured. Would send to {to_email}: {subject}")
+        if not self.username or not self.password or not self.host:
+            print(f"CRITICAL: Email NOT configured. Host: {self.host}, User: {self.username}")
+            print(f"Check your environment variables: SMTP_HOST, SMTP_USER, SMTP_PASSWORD")
             return False
 
         message = MIMEMultipart("alternative")
-        message["From"] = self.from_email
+        # Ensure From address is valid; fallback to username if SMTP_FROM is missing
+        sender = self.from_email or self.username
+        message["From"] = sender
         message["To"] = to_email
         message["Subject"] = subject
 
@@ -38,17 +41,33 @@ class EmailService:
         message.attach(MIMEText(html_content, "html"))
 
         try:
+            # Determine TLS strategy based on port
+            # Port 465 usually requires implicit TLS (use_tls=True)
+            # Port 587 usually requires explicit STARTTLS (start_tls=True)
+            use_tls = (str(self.port) == "465")
+            start_tls = (str(self.port) == "587")
+            
+            print(f"Attempting to send email to {to_email} via {self.host}:{self.port} (TLS: {use_tls}, STARTTLS: {start_tls})")
+            
             await aiosmtplib.send(
                 message,
                 hostname=self.host,
-                port=self.port,
+                port=int(self.port),
                 username=self.username,
                 password=self.password,
-                start_tls=True
+                use_tls=use_tls,
+                start_tls=start_tls,
+                timeout=10
             )
+            print(f"Successfully sent email to {to_email}")
             return True
         except Exception as e:
-            print(f"Failed to send email: {e}")
+            print(f"SMTP ERROR for {to_email}: {type(e).__name__}: {str(e)}")
+            # Log specific common issues
+            if "authentication failed" in str(e).lower():
+                print("HINT: SMTP Authentication failed. Check your password or App Password settings.")
+            elif "connection refused" in str(e).lower() or "timeout" in str(e).lower():
+                print(f"HINT: Could not connect to {self.host}:{self.port}. Check host/port/firewall.")
             return False
 
     async def send_verification_email(self, email: str, name: str, token: str) -> bool:
