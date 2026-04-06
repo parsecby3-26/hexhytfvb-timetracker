@@ -10,12 +10,13 @@ app = FastAPI(title="hexhytfvb TimeTracker API")
 
 # CORS configuration - specific origins to prevent browser blocking
 origins = [
+    "https://hxf-timetracker-app.vercel.app",
     "https://timesheetick.vercel.app",
     "https://ticksheet-app.netlify.app",
+    "https://hexhytfvb-timesheet.vercel.app",
     "http://localhost:3000",
     "http://localhost:3005",
     "http://localhost:8000",
-    "https://hexhytfvb-timesheet.vercel.app",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:8000",
 ]
