@@ -77,24 +77,18 @@ const Layout = ({ children }) => {
         style={{ width: collapsed ? '80px' : '260px', transition: 'width 0.3s ease' }}
       >
         <div className="sidebar-logo" style={{ padding: '20px', textAlign: 'center', position: 'relative' }}>
-          {collapsed ? (
-            <div style={{
-              width: '40px', height: '40px', borderRadius: '8px', margin: '0 auto',
-              background: 'linear-gradient(135deg, #7c3aed, #4f46e5)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: 'white', fontWeight: 'bold', fontFamily: 'monospace', fontSize: '14px'
-            }}>hx</div>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'center' }}>
-              <div style={{
-                width: '36px', height: '36px', borderRadius: '8px', flexShrink: 0,
-                background: 'linear-gradient(135deg, #7c3aed, #4f46e5)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: 'white', fontWeight: 'bold', fontFamily: 'monospace', fontSize: '13px'
-              }}>hx</div>
-              <div style={{ color: 'white', fontWeight: '700', fontSize: '16px', letterSpacing: '0.5px' }}>
-                hexhytfvb
-              </div>
+          <img
+            src="/logo.png"
+            alt="hexhytfvb Logo"
+            style={{
+              height: collapsed ? '24px' : '40px',
+              maxWidth: '100%',
+              transition: 'height 0.3s ease'
+            }}
+          />
+          {!collapsed && (
+            <div style={{ color: 'white', fontWeight: 'bold', marginTop: '8px', fontSize: '18px' }}>
+              hexhytfvb
             </div>
           )}
         </div>
@@ -124,9 +118,9 @@ const Layout = ({ children }) => {
               <div className="user-details">
                 <div className="user-name">{user?.name}</div>
                 <div className="user-role">
-                  {user?.roles?.map((r) => (
-                    <span key={r.id || r.value} className={getRoleBadgeClass(r.value)}>
-                      {r.value}
+                  {user?.roles?.map((r, idx) => (
+                    <span key={r.id || r.value || idx} className={getRoleBadgeClass(String(r.value || ''))}>
+                      {String(r.value || '')}
                     </span>
                   ))}
                 </div>

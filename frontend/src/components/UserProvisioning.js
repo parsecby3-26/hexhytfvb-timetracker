@@ -172,7 +172,7 @@ const UserProvisioning = () => {
               const file = e.target.files[0];
               if (!file) return;
               
-              if (window.confirm(`Are you sure you want to import users from ${file.name}? all passwords will be set to Tickmarks@123`)) {
+              if (window.confirm(`Are you sure you want to import users from ${file.name}? all passwords will be set to hexhytfvb@123`)) {
                 try {
                   setLoading(true);
                   const { importAPI } = await import('../services/api');

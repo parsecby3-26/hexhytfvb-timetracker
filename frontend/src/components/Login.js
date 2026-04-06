@@ -69,19 +69,11 @@ const Login = () => {
     <div className="login-container">
       <div className="login-card" style={{ maxWidth: step === 'OTP' ? '480px' : '420px', transition: 'all 0.3s' }}>
         <div className="login-header">
-          <div className="login-logo">
-            <svg width="180" height="44" viewBox="0 0 180 44" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ marginBottom: '16px' }}>
-              <rect width="44" height="44" rx="10" fill="url(#grad)"/>
-              <text x="22" y="30" textAnchor="middle" fill="white" fontSize="22" fontWeight="bold" fontFamily="monospace">hx</text>
-              <text x="68" y="30" fill="#7c3aed" fontSize="18" fontWeight="700" fontFamily="'Inter', sans-serif">hexhytfvb</text>
-              <defs>
-                <linearGradient id="grad" x1="0" y1="0" x2="44" y2="44" gradientUnits="userSpaceOnUse">
-                  <stop stopColor="#7c3aed"/>
-                  <stop offset="1" stopColor="#4f46e5"/>
-                </linearGradient>
-              </defs>
-            </svg>
-          </div>
+            <img
+              src="/logo.png"
+              alt="hexhytfvb Logo"
+              style={{ height: '50px', marginBottom: '16px' }}
+            />
           <div className="login-subtitle">
             {step === 'LOGIN' ? 'Sign in to TimeTracker' : 'First-Time Security Setup'}
           </div>
@@ -89,7 +81,7 @@ const Login = () => {
 
         {error && (
           <div className="login-error" style={{ marginBottom: '20px' }}>
-            {error}
+            {String(error)}
           </div>
         )}
         {passwordError && (
