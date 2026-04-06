@@ -1,3 +1,4 @@
+# Version: 1.0.1-stabilized
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
