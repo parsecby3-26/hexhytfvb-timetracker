@@ -4,18 +4,8 @@
   "framework": null,
   "rewrites": [
     {
-      "source": "/api/cron",
-      "destination": "/api/cron.py"
-    },
-    {
       "source": "/(.*)",
       "destination": "/index.html"
-    }
-  ],
-  "crons": [
-    {
-      "path": "/api/cron",
-      "schedule": "*/14 * * * *"
     }
   ]
 }

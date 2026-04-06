@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from app.api import auth, users, projects, time_entries, reports, cron, notifications, support
+from app.api import auth, users, projects, time_entries, reports, cron, notifications, support, debug
 from app.core.database import engine, Base
 
 app = FastAPI(title="hexhytfvb TimeTracker API")
@@ -70,6 +70,7 @@ app.include_router(reports.router, prefix="/api/reports", tags=["Reports"])
 app.include_router(cron.router, prefix="/api/cron", tags=["Cron Jobs"])
 app.include_router(notifications.router, prefix="/api/notifications", tags=["Notifications"])
 app.include_router(support.router, prefix="/api/support", tags=["Support"])
+app.include_router(debug.router, prefix="/api/debug", tags=["Debug"])
 @app.on_event("startup")
 async def startup_event():
     """Initialize database on startup (non-blocking)"""

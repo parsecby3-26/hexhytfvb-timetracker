@@ -49,25 +49,46 @@ class EmailService:
             
             print(f"Attempting to send email to {to_email} via {self.host}:{self.port} (TLS: {use_tls}, STARTTLS: {start_tls})")
             
-            await aiosmtplib.send(
-                message,
-                hostname=self.host,
-                port=int(self.port),
-                username=self.username,
-                password=self.password,
-                use_tls=use_tls,
-                start_tls=start_tls,
-                timeout=10
-            )
+            try:
+                await aiosmtplib.send(
+                    message,
+                    hostname=self.host,
+                    port=int(self.port),
+                    username=self.username,
+                    password=self.password,
+                    use_tls=use_tls,
+                    start_tls=start_tls,
+                    timeout=15
+                )
+            except Exception as primary_error:
+                print(f"Primary SMTP ({self.host}) failed: {type(primary_error).__name__}: {str(primary_error)}")
+                
+                # If the primary failed and it wasn't already googlemail, try the fallback
+                if "googlemail" not in self.host.lower():
+                    print(f"Trying fallback host: smtp.googlemail.com...")
+                    await aiosmtplib.send(
+                        message,
+                        hostname="smtp.googlemail.com",
+                        port=int(self.port),
+                        username=self.username,
+                        password=self.password,
+                        use_tls=use_tls,
+                        start_tls=start_tls,
+                        timeout=15
+                    )
+                else:
+                    raise primary_error
+
             print(f"Successfully sent email to {to_email}")
             return True
         except Exception as e:
             print(f"SMTP ERROR for {to_email}: {type(e).__name__}: {str(e)}")
             # Log specific common issues
-            if "authentication failed" in str(e).lower():
+            if "authentication failed" in str(e).lower() or "username and password not accepted" in str(e).lower():
                 print("HINT: SMTP Authentication failed. Check your password or App Password settings.")
-            elif "connection refused" in str(e).lower() or "timeout" in str(e).lower():
-                print(f"HINT: Could not connect to {self.host}:{self.port}. Check host/port/firewall.")
+            elif "connection refused" in str(e).lower() or "timeout" in str(e).lower() or "timed out" in str(e).lower():
+                print(f"HINT: Connection timed out for both primary and fallback. This is likely a Render network restriction.")
+                print(f"Check Render outbound networking or try port 465 vs 587.")
             return False
 
     async def send_verification_email(self, email: str, name: str, token: str) -> bool:

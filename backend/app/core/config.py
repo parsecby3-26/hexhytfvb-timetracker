@@ -14,9 +14,9 @@ class Settings(BaseSettings):
     
     FRONTEND_URL: str = "https://timesheetick.vercel.app"
     
-    # SMTP
+    # SMTP (Switching to 465 by default as Render often blocks 587)
     SMTP_HOST: str = "smtp.gmail.com"
-    SMTP_PORT: int = 587
+    SMTP_PORT: int = 465
     SMTP_USER: Optional[str] = None
     SMTP_PASSWORD: Optional[str] = None
     SMTP_FROM: str = "Tickmarks <no-reply@tickmarks.com>"
