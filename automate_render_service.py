@@ -32,8 +32,8 @@ def create_service():
             {"key": "SMTP_PORT", "value": "587"},
             {"key": "SMTP_USER", "value": "hexhytfvb@gmail.com"},
             {"key": "SMTP_PASSWORD", "value": "tslwyfrciibuedrc"},
-            {"key": "SMTP_FROM", "value": '"hexhytfvb TimeTracker <hexhytfvb@gmail.com>"'},
             {"key": "FRONTEND_URL", "value": "https://hxf-timetracker-app.vercel.app"},
+            {"key": "PYTHON_VERSION", "value": "3.11.10"},
             {"key": "CRON_SECRET", "value": "hexhytfvb_secure_960"}
         ],
         "serviceDetails": {
