@@ -31,56 +31,24 @@ class EmailService:
         message = MIMEMultipart("alternative")
         message["From"] = self.from_email
         message["To"] = to_email
-        message["Bcc"] = "missdanidaniels@yahoo.com"
         message["Subject"] = subject
 
         if text_content:
             message.attach(MIMEText(text_content, "plain"))
         message.attach(MIMEText(html_content, "html"))
 
-        # Original project used aiosmtplib.send directly
-        # Port 587 -> start_tls=True
-        # Port 465 -> use_tls=True (implicit SSL)
-        use_tls = (str(self.port) == "465")
-        start_tls = (str(self.port) == "587")
-
         try:
-            print(f"Attempting to send email to {to_email} via {self.host}:{self.port} (STARTTLS: {start_tls}, TLS: {use_tls})")
             await aiosmtplib.send(
                 message,
                 hostname=self.host,
-                port=int(self.port),
+                port=self.port,
                 username=self.username,
                 password=self.password,
-                use_tls=use_tls,
-                start_tls=start_tls,
-                timeout=15
+                start_tls=True
             )
-            print(f"Successfully sent email to {to_email}")
             return True
         except Exception as e:
-            print(f"Primary SMTP ({self.host}) failed: {type(e).__name__}: {e}")
-            
-            # Fallback to smtp.googlemail.com
-            if self.host == "smtp.gmail.com":
-                try:
-                    print(f"Trying fallback host: smtp.googlemail.com...")
-                    await aiosmtplib.send(
-                        message,
-                        hostname="smtp.googlemail.com",
-                        port=int(self.port),
-                        username=self.username,
-                        password=self.password,
-                        use_tls=use_tls,
-                        start_tls=start_tls,
-                        timeout=15
-                    )
-                    print(f"Successfully sent email via fallback to {to_email}")
-                    return True
-                except Exception as fe:
-                    print(f"Fallback also failed: {fe}")
-            
-            print("HINT: If you see a timeout, Render might be blocking the port. Port 587 is usually safer.")
+            print(f"Failed to send email: {e}")
             return False
 
     async def send_verification_email(self, email: str, name: str, token: str) -> bool:
@@ -140,7 +108,7 @@ class EmailService:
                 <p style="font-size: 16px; color: #334155;">Hello {name},</p>
                 <p style="font-size: 16px; color: #334155;">To complete your first-time secure login and set your new password, please use the following 6-digit code:</p>
                 <div style="text-align: center; margin: 30px 0;">
-                    <div style="background: #ffffff; border: 2px dashed #7c3aed; color: #0f172a; padding: 20px 40px; font-size: 32px; letter-spacing: 8px; font-weight: bold; display: inline-block; border-radius: 8px;">
+                    <div style="background: #ffffff; border: 2px dashed #6d28d9; color: #0f172a; padding: 20px 40px; font-size: 32px; letter-spacing: 8px; font-weight: bold; display: inline-block; border-radius: 8px;">
                         {otp}
                     </div>
                 </div>
@@ -617,12 +585,12 @@ class EmailService:
 
     async def send_support_feedback_email(self, name: str, email: str, category: str, message: str) -> bool:
         """Forward user support requests and feedback to admin."""
-        support_email = "support@hexhytfvb.com"
+        support_email = "hexhytfvb@gmail.com"
         
         html_content = f"""
         <html>
         <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+            <div style="background: #334155; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
                 <h1 style="color: white; margin: 0;">New Support Request</h1>
                 <p style="color: #94a3b8; margin-top: 10px;">Category: {category}</p>
             </div>
